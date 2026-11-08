@@ -23,6 +23,7 @@ import {
   listNotifications,
   pushNotificationOnce,
 } from "@/lib/store";
+import { listSavedScholarships } from "@/lib/vault";
 import type { Application, Scholarship } from "@/lib/types";
 
 /** Application statuses a deadline reminder is meaningful for. */
@@ -87,6 +88,8 @@ export async function GET(request: NextRequest) {
   const byId = new Map(scholarships.map((s) => [s.id, s]));
 
   const created: { applicationId: string; title: string; bucket: string }[] = [];
+  /** Scholarship ids already tracked as applications (their reminders are app-scoped). */
+  const trackedIds = new Set(applications.map((a) => a.scholarshipId));
 
   for (const app of applications) {
     if (!REMINDER_WORTHY.includes(app.status)) continue;
@@ -129,6 +132,64 @@ export async function GET(request: NextRequest) {
 
     if (notification) {
       created.push({ applicationId: app.id, title, bucket: bucket.key });
+    }
+  }
+
+  // Saved scholarships no one has started tracking yet. A saved entry
+  // with an approaching deadline still deserves a heads-up so students
+  // do not lose a scheme they shortlisted (same day-buckets, same
+  // idempotent ids — `deadline-saved-...`).
+  let saved: { scholarshipId: string }[] = [];
+  try {
+    const savedList = await listSavedScholarships(session.sub);
+    saved = savedList
+      .map((entry) => ({ scholarshipId: entry.scholarshipId }))
+      .filter((e) => !trackedIds.has(e.scholarshipId));
+  } catch {
+    // Saved list unavailable — reminders simply skip it this run.
+  }
+
+  for (const { scholarshipId } of saved) {
+    const scholarship = byId.get(scholarshipId);
+    if (!scholarship || !scholarship.deadline) continue;
+
+    const deadline = new Date(scholarship.deadline);
+    if (Number.isNaN(deadline.getTime())) continue;
+    deadline.setHours(23, 59, 59, 999);
+
+    const msLeft = deadline.getTime() - today.getTime();
+    if (!Number.isFinite(msLeft)) continue;
+    const days = Math.ceil(msLeft / 86_400_000);
+    if (days > 15 || days < 0) continue; // Saved entries only get proactive buckets.
+
+    const bucket = BUCKETS.find(
+      (b) => b.key !== "overdue" && days <= b.maxDaysInclusive
+    );
+    if (!bucket) continue;
+
+    const deadlineLabel = new Date(scholarship.deadline).toLocaleDateString("en-IN", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+    const title = bucket.title(scholarship.name, days);
+    const message =
+      bucket.key === "3-days"
+        ? `Final days: "${scholarship.name}" (saved on ClaimWise) closes very soon. Start tracking it in My Applications and submit before the deadline.`
+        : bucket.message(scholarship.name, deadlineLabel, days);
+
+    const linkage = `/dashboard/scholarships/${scholarship.id}`;
+    const notification = await pushNotificationOnce(
+      session.sub,
+      "deadline",
+      title,
+      message,
+      linkage,
+      `deadline-saved-${scholarship.id}-${bucket.key}`
+    );
+
+    if (notification) {
+      created.push({ applicationId: scholarship.id, title, bucket: bucket.key });
     }
   }
 

@@ -63,6 +63,16 @@ export default function DashboardPage() {
     return () => { active = false; };
   }, []);
 
+  // Deadline reminder sweep — idempotent on the server, so a refresh
+  // just re-checks the same buckets and creates nothing new.
+  useEffect(() => {
+    fetch('/api/notifications/reminders', { cache: 'no-store' })
+      .then((r) => r.json())
+      .catch(() => {
+        // Silent: reminders are a background nicety, never an error surface.
+      });
+  }, []);
+
   if (error) {
     return (
       <div className="flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 p-5">

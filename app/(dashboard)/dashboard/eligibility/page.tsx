@@ -20,7 +20,8 @@ const STATES = [
   'Andhra Pradesh', 'Assam', 'Bihar', 'Chhattisgarh', 'Delhi', 'Goa', 'Gujarat', 'Haryana',
   'Himachal Pradesh', 'Jharkhand', 'Karnataka', 'Kerala', 'Madhya Pradesh', 'Maharashtra',
   'Manipur', 'Meghalaya', 'Odisha', 'Punjab', 'Rajasthan', 'Tamil Nadu', 'Telangana',
-  'Tripura', 'Uttar Pradesh', 'Uttarakhand', 'West Bengal', 'Other',
+  'Tripura', 'Uttar Pradesh', 'Uttarakhand', 'West Bengal',
+  'Jammu & Kashmir', 'Ladakh', 'Other',
 ];
 const LEVELS = ['10th', '12th', 'Diploma', 'Undergraduate', 'Postgraduate', 'PhD'];
 const CATEGORIES = ['General', 'OBC', 'SC', 'ST', 'EWS'];

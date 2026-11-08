@@ -10,7 +10,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionFromRequest } from "@/lib/auth";
-import { getWorkspace, updateApplicationStatus } from "@/lib/store";
+import { getWorkspace, updateApplicationDetails, updateApplicationStatus } from "@/lib/store";
 import type { ApplicationStatus } from "@/lib/types";
 
 const STATUSES: ApplicationStatus[] = [
@@ -24,6 +24,8 @@ const STATUSES: ApplicationStatus[] = [
   "rejected",
   "more-info-required",
 ];
+
+const PATCH_BODY_WHITELIST_STATUSES = STATUSES;
 
 export async function PATCH(
   request: NextRequest,
@@ -42,15 +44,36 @@ export async function PATCH(
     confirmSubmitted?: boolean;
   };
 
-  if (!body.status || !STATUSES.includes(body.status)) {
+  const userData = await getWorkspace(session.sub, session.email, session.name);
+  void userData;
+
+  // Notes / next-step only (no status transition).
+  if (!body.status) {
+    if (body.notes === undefined && body.nextAction === undefined) {
+      return NextResponse.json(
+        { success: false, error: "A valid application status, notes or next action is required." },
+        { status: 400 }
+      );
+    }
+    const details = await updateApplicationDetails(id, session.sub, {
+      notes: typeof body.notes === "string" ? body.notes : undefined,
+      nextAction: typeof body.nextAction === "string" ? body.nextAction : undefined,
+    });
+    if (!details.success) {
+      return NextResponse.json(
+        { success: false, error: details.error },
+        { status: details.error?.includes("not found") ? 404 : 400 }
+      );
+    }
+    return NextResponse.json({ success: true, application: details.application });
+  }
+
+  if (!PATCH_BODY_WHITELIST_STATUSES.includes(body.status)) {
     return NextResponse.json(
       { success: false, error: "A valid application status is required." },
       { status: 400 }
     );
   }
-
-  const userData = await getWorkspace(session.sub, session.email, session.name);
-  void userData;
 
   const result = await updateApplicationStatus(id, session.sub, body.status, {
     notes: body.notes,

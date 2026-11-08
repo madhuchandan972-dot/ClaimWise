@@ -969,6 +969,54 @@ export async function updateApplicationStatus(
   return { success: true, application: rowToApplication(data as ApplicationRow) };
 }
 
+/**
+ * Save notes / next-step WITHOUT a status change (used by the
+ * application tracker's inline edit). Appends a timeline entry so the
+ * edit is auditable.
+ */
+export async function updateApplicationDetails(
+  appId: string,
+  userId: string,
+  opts: { notes?: string; nextAction?: string }
+): Promise<{ success: boolean; error?: string; application?: Application }> {
+  if (opts.notes === undefined && opts.nextAction === undefined) {
+    return { success: false, error: "Nothing to update." };
+  }
+  const app = await getApplication(appId, userId);
+  if (!app) return { success: false, error: "Application not found." };
+
+  const patch: Record<string, unknown> = {};
+  if (opts.notes !== undefined) patch.notes = opts.notes;
+  if (opts.nextAction !== undefined) patch.next_action = opts.nextAction;
+  patch.timeline = [
+    ...(app.timeline ?? []),
+    {
+      date: new Date().toISOString(),
+      action:
+        opts.nextAction !== undefined
+          ? `Next step updated by student: ${opts.nextAction}`
+          : "Notes updated by student",
+      status: "completed",
+    },
+  ];
+
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("applications")
+    .update(patch)
+    .eq("id", appId)
+    .eq("user_id", userId)
+    .select("*")
+    .maybeSingle();
+
+  if (error || !data) {
+    const e = dbError("updateApplicationDetails", error ?? { message: "update returned no row" });
+    return { success: false, error: e.message };
+  }
+
+  return { success: true, application: rowToApplication(data as ApplicationRow) };
+}
+
 function statusLabel(status: ApplicationStatus): string {
   const map: Record<ApplicationStatus, string> = {
     "not-started": "Not Started",

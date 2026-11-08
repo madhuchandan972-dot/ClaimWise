@@ -16,6 +16,7 @@ import {
   BookmarkCheck,
   Globe,
   GraduationCap,
+  ClipboardList,
 } from 'lucide-react';
 import type { Scholarship } from '@/lib/types';
 import { getStatusColor } from '@/lib/utils';
@@ -28,14 +29,18 @@ export default function ScholarshipDetailPage({ params }: { params: Promise<{ id
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
+  const [tracked, setTracked] = useState(false);
+  const [tracking, setTracking] = useState(false);
+  const [trackError, setTrackError] = useState('');
 
   useEffect(() => {
     let active = true;
     Promise.all([
       fetch('/api/scholarships').then((r) => r.json()),
       fetch('/api/scholarships/saved').then((r) => r.json()),
+      fetch('/api/applications').then((r) => r.json()).catch(() => null),
     ])
-      .then(([catalogue, savedRes]) => {
+      .then(([catalogue, savedRes, appsRes]) => {
         if (!active) return;
         const list = Array.isArray(catalogue.scholarships) ? (catalogue.scholarships as Scholarship[]) : [];
         const found = list.find((s) => s.id === id);
@@ -44,10 +49,36 @@ export default function ScholarshipDetailPage({ params }: { params: Promise<{ id
         if (savedRes.success) {
           setSaved((savedRes.saved as { scholarshipId: string }[]).some((s) => s.scholarshipId === id));
         }
+        if (appsRes?.success) {
+          setTracked((appsRes.applications as { scholarshipId: string }[]).some((a) => a.scholarshipId === id));
+        }
       })
       .catch(() => active && setNotFound(true));
     return () => { active = false; };
   }, [id]);
+
+  async function trackApplication() {
+    if (!sch || tracked) return;
+    setTracking(true);
+    setTrackError('');
+    try {
+      const res = await fetch('/api/applications', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scholarshipId: sch.id }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setTrackError(data.error ?? 'Could not start tracking this scholarship.');
+        return;
+      }
+      setTracked(true);
+    } catch {
+      setTrackError('Network error. Please try again.');
+    } finally {
+      setTracking(false);
+    }
+  }
 
   async function toggleSaved() {
     if (!sch) return;
@@ -113,18 +144,34 @@ export default function ScholarshipDetailPage({ params }: { params: Promise<{ id
         <Link href="/dashboard/scholarships" className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-500 hover:text-blue-700">
           <ArrowLeft className="h-3.5 w-3.5" /> Back to Explore Scholarships
         </Link>
-        <button
-          onClick={toggleSaved}
-          disabled={saving}
-          className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-xs font-semibold transition-colors ${
-            saved ? 'border-purple-300 bg-purple-50 text-purple-700' : 'border-gray-300 bg-white text-gray-600 hover:border-purple-300 hover:text-purple-700'
-          } disabled:opacity-60`}
-        >
-          {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : saved ? <BookmarkCheck className="h-3.5 w-3.5" /> : <Bookmark className="h-3.5 w-3.5" />}
-          {saved ? 'Saved' : 'Save scholarship'}
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={trackApplication}
+            disabled={tracking || tracked}
+            className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-xs font-semibold transition-colors ${
+              tracked
+                ? 'border-green-300 bg-green-50 text-green-700'
+                : 'border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100'
+            } disabled:opacity-60`}
+          >
+            {tracking ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ClipboardList className="h-3.5 w-3.5" />}
+            {tracked ? 'In My Applications' : 'Track application'}
+          </button>
+          <button
+            onClick={toggleSaved}
+            disabled={saving}
+            className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-xs font-semibold transition-colors ${
+              saved ? 'border-purple-300 bg-purple-50 text-purple-700' : 'border-gray-300 bg-white text-gray-600 hover:border-purple-300 hover:text-purple-700'
+            } disabled:opacity-60`}
+          >
+            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : saved ? <BookmarkCheck className="h-3.5 w-3.5" /> : <Bookmark className="h-3.5 w-3.5" />}
+            {saved ? 'Saved' : 'Save scholarship'}
+          </button>
+        </div>
       </div>
-      {saveError && <p className="text-xs text-red-600">{saveError}</p>}
+      {(saveError || trackError) && (
+        <p className="text-xs text-red-600">{trackError || saveError}</p>
+      )}
 
       <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">

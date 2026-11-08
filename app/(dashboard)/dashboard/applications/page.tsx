@@ -56,6 +56,9 @@ export default function ApplicationsPage() {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [confirmSubmit, setConfirmSubmit] = useState<Application | null>(null);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [draftNotes, setDraftNotes] = useState('');
+  const [draftNext, setDraftNext] = useState('');
 
   const load = useCallback(async () => {
     const r = await fetch('/api/applications');
@@ -84,6 +87,29 @@ export default function ApplicationsPage() {
       setOpen(app.id);
       await load();
       setConfirmSubmit(null);
+    } catch {
+      setError('Network error. Please try again.');
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function saveDetails(app: Application) {
+    setBusy(app.id);
+    setError('');
+    try {
+      const r = await fetch(`/api/applications/${app.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notes: draftNotes, nextAction: draftNext }),
+      });
+      const d = await r.json();
+      if (!d.success) {
+        setError(d.error ?? 'Could not save the details.');
+        return;
+      }
+      setEditing(null);
+      await load();
     } catch {
       setError('Network error. Please try again.');
     } finally {
@@ -129,7 +155,8 @@ export default function ApplicationsPage() {
         <div className="rounded-2xl border border-dashed border-gray-300 bg-white py-16 text-center">
           <ClipboardList className="mx-auto h-10 w-10 text-gray-300" />
           <p className="mt-4 text-sm font-semibold text-gray-700">No applications yet</p>
-          <p className="mt-1 text-xs text-gray-500">Start one from the Application Assistant.</p>
+          <p className="mt-1 text-xs text-gray-500">Start one from Explore Scholarships (open a listing →
+          &ldquo;Track application&rdquo;) or from the Application Assistant.</p>
           <Link href="/dashboard/assistant" className="btn-primary mt-5 !py-2.5 text-xs">
             Open the Assistant <ArrowRight className="h-3.5 w-3.5" />
           </Link>
@@ -165,8 +192,56 @@ export default function ApplicationsPage() {
                       <div><p className="text-gray-400">Application ID</p><p className="mt-0.5 font-mono font-semibold text-gray-700">{app.id}</p></div>
                       <div><p className="text-gray-400">Applied on</p><p className="mt-0.5 font-semibold text-gray-700">{app.appliedDate ? new Date(app.appliedDate).toLocaleDateString('en-IN') : '—'}</p></div>
                       <div><p className="text-gray-400">Docs attached</p><p className="mt-0.5 font-semibold text-gray-700">{app.documents.length}</p></div>
-                      <div><p className="text-gray-400">Notes</p><p className="mt-0.5 text-gray-700">{app.notes || '—'}</p></div>
+                      <div>
+                        <div className="flex items-center justify-between"><p className="text-gray-400">Notes</p>
+                          <button
+                            onClick={() => {
+                              if (editing === app.id) { setEditing(null); return; }
+                              setEditing(app.id);
+                              setDraftNotes(app.notes || '');
+                              setDraftNext(app.nextAction || '');
+                            }}
+                            className="text-[11px] font-semibold text-blue-700 hover:underline"
+                          >
+                            {editing === app.id ? 'Cancel' : 'Edit details'}
+                          </button>
+                        </div>
+                        <p className="mt-0.5 text-gray-700">{app.notes || '—'}</p>
+                      </div>
                     </div>
+
+                    {editing === app.id && (
+                      <div className="mt-3 space-y-2 rounded-xl border border-blue-100 bg-blue-50/60 p-3">
+                        <div>
+                          <label className="text-[11px] font-semibold text-gray-500">Next step</label>
+                          <input
+                            value={draftNext}
+                            onChange={(e) => setDraftNext(e.target.value)}
+                            maxLength={280}
+                            className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs text-gray-800 outline-none focus:border-blue-400"
+                            placeholder="e.g. Fill the NSP form with OTR login, then upload income certificate"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[11px] font-semibold text-gray-500">Notes</label>
+                          <textarea
+                            value={draftNotes}
+                            onChange={(e) => setDraftNotes(e.target.value)}
+                            rows={2}
+                            maxLength={2000}
+                            className="mt-1 w-full resize-none rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs text-gray-800 outline-none focus:border-blue-400"
+                            placeholder="Anything you want to keep with this application"
+                          />
+                        </div>
+                        <button
+                          onClick={() => saveDetails(app)}
+                          disabled={busy === app.id}
+                          className="btn-primary !px-3 !py-1.5 text-xs disabled:opacity-60"
+                        >
+                          {busy === app.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Save details'}
+                        </button>
+                      </div>
+                    )}
 
                     {/* Timeline */}
                     <h3 className="mb-3 mt-5 text-xs font-bold text-gray-700">Application history</h3>
