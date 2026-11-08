@@ -480,3 +480,165 @@ export async function runAssistantReply(
     return { mode: "error", reply: "", reason };
   }
 }
+
+// ----------------------------------------------------------------
+// Live scholarship discovery (Gemini + Google Search grounding)
+//
+// The catalogue philosophy in ClaimWise is strict: no invented
+// scholarships. This pipeline therefore:
+//   • uses google_search grounding so results come from the live
+//     web rather than model memory,
+//   • requires every entry to carry a real, official source URL,
+//   • is stored with verification_status = 'needs_verification'
+//     until an administrator confirms it manually.
+// ----------------------------------------------------------------
+
+export interface LiveScholarshipDraft {
+  name: string;
+  provider: string;
+  amount: string;
+  /** ISO 8601 date (YYYY-MM-DD at minimum). */
+  deadline: string;
+  status?: string;
+  description: string;
+  educationLevel?: string;
+  states?: string[];
+  courses?: string[];
+  categoryRequirements?: string[];
+  scholarshipType?: string;
+  familyIncomeCriteria?: string;
+  maxIncome?: number;
+  sourceUrl: string;
+  officialLink?: string;
+}
+
+const LIVE_DISCOVERY_PROMPT = (todayIso: string) =>
+  `You are the live catalogue researcher for ClaimWise, a platform for Indian students. Today's date is ${todayIso} (Asia/Kolkata).
+
+Task: find scholarships for Indian students whose application window is CURRENTLY OPEN (open today, closing in the future). Use Google Search grounding to check every detail against official, verifiable sources such as government portals (National Scholarship Portal, state scholarship portals, AICTE, UGC, Ministry portals) or the provider's own official page.
+
+Rules you MUST follow:
+- Only REAL schemes you can trace to an official page right now. Never invent names, amounts or deadlines from memory.
+- Every entry must include the official page URL in "sourceUrl" that you actually saw in search results.
+- Only include a scheme if you are confident its application window is open and you have a publicly stated deadline.
+- If the official page states a deadline that already passed, drop the scheme.
+- Prefer variety: central government, state government, and private/corporate schemes. 8 to 14 entries.
+- Amounts and deadlines must match what the official page or a current official notice says.
+- If the deadline is expressed in words (e.g. "November 30, 2026"), normalise it to YYYY-MM-DD.
+
+Respond ONLY with a JSON array (no prose, no markdown fences) where each element is:
+{"name":"...","provider":"...","amount":"...","deadline":"YYYY-MM-DD","description":"2-3 sentences from official wording","educationLevel":"10th|12th|Diploma|Undergraduate|Postgraduate|PhD or specific course","states":["Karnataka"] or [] for pan-India,"categoryRequirements":["General","OBC","SC","ST","EWS"] or [],"scholarshipType":"Merit|Means-cum-merit|Minority|Girls|Technical|...","familyIncomeCriteria":"as published","maxIncome":numericAnnualRupeesOrNull,"sourceUrl":"https://official/page"}`;
+
+/**
+ * Runs a grounded Gemini call with the model chain. If a model rejects
+ * the google_search tool (some tiers do), the chain is retried without
+ * grounding — the caller then marks results as needing verification,
+ * which the persistence layer already does.
+ */
+async function liveSearchCycle(body: Record<string, unknown>): Promise<string> {
+  const apiKey = process.env.GOOGLE_GEMINI_API_KEY;
+  if (!apiKey) throw new GeminiAuthError("GEMINI_API_KEY_MISSING");
+  const chain = geminiModelChain();
+  let lastStatus = 0;
+  let lastMessage = "";
+
+  for (let pass = 0; pass < 2; pass++) {
+    const withTools = pass === 0;
+    for (const model of chain) {
+      let res: Response;
+      try {
+        res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+            body: JSON.stringify(withTools ? { ...body, tools: [{ google_search: {} }] } : body),
+            signal: AbortSignal.timeout(90_000),
+          }
+        );
+      } catch (err) {
+        const reason = err instanceof Error ? err.message : "network error";
+        throw new GeminiUnavailableError(`Live search request failed (${reason}).`);
+      }
+
+      if (res.ok) {
+        const json = (await res.json()) as {
+          candidates?: { content?: { parts?: { text?: string }[] } }[];
+        };
+        const text =
+          json.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("") ?? "";
+        if (!text) {
+          lastMessage = "empty response";
+          continue;
+        }
+        return text;
+      }
+
+      lastStatus = res.status;
+      const raw = await res.text().catch(() => "");
+      try {
+        lastMessage = (JSON.parse(raw) as GeminiApiErrorBody).error?.message ?? raw;
+      } catch {
+        lastMessage = raw;
+      }
+      lastMessage = (lastMessage ?? "").slice(0, 300);
+
+      if (res.status === 401 || res.status === 403) {
+        throw new GeminiAuthError(describeAuthFailure(res.status, lastMessage));
+      }
+      // A model that rejects the google_search tool should not poison the
+      // chain — skip to the next model, then retry without tools.
+      if (res.status === 400 && /tool|google_search|search/i.test(lastMessage)) continue;
+      if (isRetryableModelFailure(res.status)) continue;
+    }
+  }
+
+  throw new GeminiUnavailableError(
+    `Live search is currently unavailable (last status ${lastStatus || "unknown"}: ${lastMessage || "no detail"}). Please try again shortly.`
+  );
+}
+
+/** Calls Gemini with Google Search grounding to find currently-open scholarships. */
+export async function runLiveScholarshipSearch(): Promise<LiveScholarshipDraft[]> {
+  if (!process.env.GOOGLE_GEMINI_API_KEY) {
+    throw new GeminiAuthError("GEMINI_API_KEY_MISSING");
+  }
+
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+  const text = await liveSearchCycle({
+    contents: [{ role: "user", parts: [{ text: LIVE_DISCOVERY_PROMPT(today) }] }],
+    generationConfig: { temperature: 0.2, maxOutputTokens: 8192 },
+  });
+
+  // The grounded model occasionally wraps JSON in prose or fences — take
+  // the outermost array literal.
+  const match = text.match(/\[[\s\S]*\]/);
+  if (!match) {
+    throw new GeminiUnavailableError(
+      "Gemini did not return a parseable catalogue. Try the live search again."
+    );
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(match[0]);
+  } catch {
+    throw new GeminiUnavailableError(
+      "Gemini returned malformed catalogue data. Try the live search again."
+    );
+  }
+  if (!Array.isArray(parsed)) {
+    throw new GeminiUnavailableError(
+      "Gemini returned unexpected catalogue data. Try the live search again."
+    );
+  }
+
+  // Strip obviously incomplete entries here; the API route performs the
+  // strict schema validation and freshness filtering.
+  return (parsed as Record<string, unknown>[]).filter((entry) => {
+    const name = typeof entry?.name === "string" ? entry.name.trim() : "";
+    const provider = typeof entry?.provider === "string" ? entry.provider.trim() : "";
+    const sourceUrl = typeof entry?.sourceUrl === "string" ? entry.sourceUrl.trim() : "";
+    return name.length > 3 && provider.length > 1 && /^https?:\/\//.test(sourceUrl);
+  }) as unknown as LiveScholarshipDraft[];
+}

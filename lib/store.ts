@@ -742,6 +742,21 @@ export async function getScholarship(
   return data ? rowToScholarship(data as ScholarshipRow) : null;
 }
 
+/**
+ * Upserts live catalogue entries through the SECURITY DEFINER
+ * function from migration 004. RLS stays read-only for the table;
+ * this is the only sanctioned write path.
+ */
+export async function upsertLiveScholarships(items: unknown[]): Promise<number> {
+  if (!Array.isArray(items) || items.length === 0) return 0;
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc("upsert_live_scholarships", {
+    p_items: items,
+  });
+  if (error) throw dbError("upsertLiveScholarships", error);
+  return typeof data === "number" ? data : 0;
+}
+
 // ----------------------------------------------------------------
 // Applications
 // ----------------------------------------------------------------
