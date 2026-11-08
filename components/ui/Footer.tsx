@@ -65,7 +65,9 @@ export default function Footer() {
             <Lock className="h-3 w-3 text-green-400" />
             <span>Private storage, Row Level Security and server-verified sessions</span>
           </div>
-          <p className="text-center text-xs text-blue-400">© 2026 ClaimWise. All rights reserved.</p>
+          <p className="text-center text-xs text-blue-400">
+            © 2026 ClaimWise · v1.1.0. All rights reserved.
+          </p>
         </div>
       </div>
     </footer>
