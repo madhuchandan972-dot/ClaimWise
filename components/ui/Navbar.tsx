@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { Menu, X, ShieldCheck } from 'lucide-react';
 
 const LINKS = [
@@ -26,9 +27,14 @@ export default function Navbar() {
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex h-16 items-center justify-between">
           <Link href="/" className="flex items-center gap-2.5">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-950">
-              <span className="text-xs font-bold tracking-tight text-white">CW</span>
-            </span>
+            <Image
+              src="/claimwise-logo.png"
+              alt="ClaimWise logo"
+              width={788}
+              height={695}
+              priority
+              className="h-9 w-auto object-contain sm:h-10"
+            />
             <span className="text-lg font-bold text-blue-950">ClaimWise</span>
           </Link>
 

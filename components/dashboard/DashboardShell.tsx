@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard,
@@ -133,10 +134,14 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   return (
     <div className="min-h-screen bg-slate-50">
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col border-r border-blue-950 bg-blue-950 lg:flex">
-        <Link href="/dashboard" className="flex items-center gap-3 border-b border-white/10 px-5 py-5">
-          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white shadow-sm">
-            <span className="text-xs font-black tracking-tight text-blue-900">CW</span>
-          </span>
+        <Link href="/dashboard" className="flex items-center gap-3 border-b border-white/10 px-5 py-4">
+          <Image
+            src="/claimwise-logo.png"
+            alt="ClaimWise logo"
+            width={788}
+            height={695}
+            className="h-10 w-auto shrink-0"
+          />
           <div>
             <p className="text-base font-bold leading-none text-white">ClaimWise</p>
             <p className="mt-1 text-[10px] font-medium uppercase tracking-wider text-purple-300">Family Vault</p>
@@ -169,9 +174,13 @@ export default function DashboardShell({ children }: { children: React.ReactNode
 
       <div className="sticky top-0 z-50 flex h-14 items-center justify-between border-b border-gray-200 bg-white px-4 lg:hidden">
         <Link href="/dashboard" className="flex items-center gap-2">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-950">
-            <span className="text-xs font-bold text-white">CW</span>
-          </span>
+          <Image
+            src="/claimwise-logo.png"
+            alt="ClaimWise logo"
+            width={788}
+            height={695}
+            className="h-8 w-auto shrink-0"
+          />
           <span className="text-base font-bold text-blue-950">ClaimWise</span>
         </Link>
         <button
