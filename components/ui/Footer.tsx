@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import Image from 'next/image';
 import { Lock } from 'lucide-react';
 
 const footerLinks = {
@@ -27,9 +28,13 @@ export default function Footer() {
         <div className="grid grid-cols-1 gap-10 border-b border-white/10 pb-12 sm:grid-cols-2 lg:grid-cols-4">
           <div>
             <Link href="/" className="mb-4 flex items-center gap-2.5">
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-white">
-                <span className="text-xs font-bold text-blue-950">CW</span>
-              </span>
+              <Image
+                src="/claimwise-logo.png"
+                alt="ClaimWise logo"
+                width={788}
+                height={695}
+                className="h-9 w-auto shrink-0"
+              />
               <span className="text-lg font-bold text-white">ClaimWise</span>
             </Link>
             <p className="text-sm font-medium text-blue-100">Emergency Family Vault</p>

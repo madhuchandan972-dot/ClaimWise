@@ -1,5 +1,7 @@
 // Reusable loading and skeleton components for ClaimWise
 
+import Image from 'next/image';
+
 /** Animated rotating circle spinner in blue */
 export function Spinner({ size = 24, className = '' }: { size?: number; className?: string }) {
   return (
@@ -33,9 +35,13 @@ export function PageLoader() {
   return (
     <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white gap-5">
       <div className="flex items-center gap-2.5 mb-2">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 to-blue-800 shadow-md">
-          <span className="text-sm font-bold text-white tracking-tight">CW</span>
-        </div>
+        <Image
+          src="/claimwise-logo.png"
+          alt="ClaimWise logo"
+          width={788}
+          height={695}
+          className="h-10 w-auto"
+        />
         <span className="text-xl font-bold text-blue-900">ClaimWise</span>
       </div>
       <Spinner size={40} />

@@ -1,3 +1,4 @@
+import Image from 'next/image'
 import { CheckCircle, ShieldCheck } from 'lucide-react'
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
@@ -10,7 +11,13 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         <div className="relative z-10">
           <div className="flex items-center gap-3">
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white shadow-lg">
-              <span className="text-lg font-black tracking-tight text-blue-900">CW</span>
+              <Image
+                src="/claimwise-logo.png"
+                alt="ClaimWise logo"
+                width={788}
+                height={695}
+                className="h-10 w-auto object-contain"
+              />
             </div>
             <div>
               <span className="text-xl font-bold tracking-tight text-white">ClaimWise</span>
@@ -52,8 +59,14 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
 
       <div className="flex flex-1 flex-col items-center justify-center overflow-y-auto bg-gray-50 px-6 py-12">
         <div className="mb-8 flex items-center gap-2 lg:hidden">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-900">
-            <span className="text-sm font-black text-white">CW</span>
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white shadow-sm">
+            <Image
+              src="/claimwise-logo.png"
+              alt="ClaimWise logo"
+              width={788}
+              height={695}
+              className="h-7 w-auto object-contain"
+            />
           </div>
           <span className="text-lg font-bold text-blue-900">ClaimWise</span>
         </div>
