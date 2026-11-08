@@ -8,5 +8,6 @@ dist
 .DS_Store
 uploads/
 *.pem
+tsconfig.tsbuildinfo
 
 .vercel
