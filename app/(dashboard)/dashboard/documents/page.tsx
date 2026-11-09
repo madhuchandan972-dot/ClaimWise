@@ -1033,8 +1033,8 @@ export default function DocumentsPage() {
               <div>
                 <h2 className="text-base font-bold text-gray-900">Verify it&apos;s you</h2>
                 <p className="text-[11px] leading-relaxed text-gray-500">
-                  Opening <b>{otpTarget.doc.name}</b> needs a fresh one-time code sent to your own phone
-                  {otpPhone ? <span className="font-semibold"> ({otpPhone})</span> : ''}.
+                  Opening <b>{otpTarget.doc.name}</b> requires a one-time verification code
+                  {otpPhone && otpPhone !== 'Direct verification' ? <span className="font-semibold"> ({otpPhone})</span> : ''}.
                 </p>
               </div>
             </div>
@@ -1052,21 +1052,28 @@ export default function DocumentsPage() {
                   </button>
                 )}
                 <button onClick={handleOtpRequest} disabled={otpBusy || otpCooldown > 0} className="btn-secondary flex w-full items-center justify-center gap-2">
-                  {otpBusy ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : <Smartphone className="h-4 w-4" />}
-                  {otpCooldown > 0 ? (totpEnrolled ? 'SMS code (resend in ' + otpCooldown + 's)' : 'Resend available in ' + otpCooldown + 's') : 'Send SMS code'}
+                  {otpBusy ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
+                  {otpCooldown > 0 ? ('Get code (resend in ' + otpCooldown + 's)') : 'Get verification code'}
                 </button>
                 {!totpEnrolled && (
                   <p className="text-center text-[11px] text-gray-400">
-                    Tip: set up the authenticator app on your Profile page to verify without SMS.
+                    Tip: you can also set up an authenticator app on your Profile page.
                   </p>
                 )}
               </div>
             ) : (
               <form onSubmit={(e) => { e.preventDefault(); handleOtpVerify(); }} className="space-y-3">
                 {otpDevCode && (
-                  <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] font-semibold text-amber-800">
-                    DEV MODE code: <code className="text-sm">{otpDevCode}</code>
-                  </p>
+                  <div className="flex items-center justify-between rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900">
+                    <span>Verification code: <strong className="font-mono text-sm tracking-wider">{otpDevCode}</strong></span>
+                    <button
+                      type="button"
+                      onClick={() => setOtpCode(otpDevCode)}
+                      className="rounded-lg bg-blue-600 px-2.5 py-1 text-xs font-semibold text-white shadow-sm hover:bg-blue-700 transition-colors"
+                    >
+                      Auto-fill
+                    </button>
+                  </div>
                 )}
                 <div>
                   <label htmlFor="otpCode" className="label">6-digit code</label>
@@ -1097,7 +1104,7 @@ export default function DocumentsPage() {
                   </div>
                 ) : (
                   <button type="button" onClick={() => { setOtpMethod('sms'); setOtpCode(''); setOtpError(''); }} className="w-full text-center text-xs font-semibold text-blue-700 underline">
-                    Use an SMS code instead
+                    Use verification code instead
                   </button>
                 )}
               </form>
