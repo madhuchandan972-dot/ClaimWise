@@ -16,6 +16,7 @@ import {
   Loader2,
   AlertTriangle,
   CalendarClock,
+  Printer,
 } from 'lucide-react';
 import StatsCard from '@/components/ui/StatsCard';
 import { daysUntil } from '@/lib/dates';
@@ -53,6 +54,7 @@ const QUICK_ACTIONS = [
   { href: '/dashboard/property', label: 'Add property', desc: 'Keep ownership and registration details safe', icon: Building2 },
   { href: '/dashboard/insurance', label: 'Add insurance', desc: 'Policies, numbers and expiry dates', icon: ShieldCheck },
   { href: '/dashboard/emergency-contacts', label: 'Add a contact', desc: 'Who to call in an emergency', icon: PhoneCall },
+  { href: '/dashboard/emergency-card', label: 'Emergency card', desc: 'One printable page: contacts, insurers, dues', icon: Printer },
 ];
 
 export default function DashboardPage() {

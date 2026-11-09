@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { PhoneCall, Plus, Pencil, Trash2, Loader2, AlertTriangle, Mail, Phone } from 'lucide-react';
+import { PhoneCall, Plus, Pencil, Trash2, Loader2, AlertTriangle, Mail, Phone, Printer } from 'lucide-react';
 import Modal from '@/components/ui/Modal';
 import type { EmergencyContact } from '@/lib/types';
 
@@ -111,7 +111,12 @@ export default function EmergencyContactsPage() {
             The people your family should be able to reach quickly.
           </p>
         </div>
-        <button onClick={openCreate} className="btn-primary w-full sm:w-auto"><Plus className="h-4 w-4" /> Add Contact</button>
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+          <a href="/dashboard/emergency-card" className="btn-secondary inline-flex w-full items-center justify-center gap-2 sm:w-auto">
+            <Printer className="h-4 w-4" /> Emergency card
+          </a>
+          <button onClick={openCreate} className="btn-primary w-full sm:w-auto"><Plus className="h-4 w-4" /> Add Contact</button>
+        </div>
       </div>
 
       {error && (
