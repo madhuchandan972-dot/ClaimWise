@@ -18,6 +18,8 @@ import {
   sealElevationCookie,
   verifyOtp,
 } from "@/lib/otp";
+import { decryptTotpSecret, verifyTotp } from "@/lib/totp";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export async function POST(request: NextRequest) {
   const session = await getSessionFromRequest(request);
@@ -25,13 +27,43 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: false, error: "Not signed in." }, { status: 401 });
   }
 
-  const body = (await request.json().catch(() => null)) as { code?: string; purpose?: string } | null;
+  const body = (await request.json().catch(() => null)) as
+    | { code?: string; purpose?: string; method?: string }
+    | null;
   const purpose = String(body?.purpose ?? "").trim() === "vault-file" ? "vault-file" : OTP_PURPOSE;
 
-  const result = await verifyOtp(session.sub, purpose, String(body?.code ?? ""));
+  // Two independent unlock methods share one elevation:
+  //  • sms   — 6-digit code sent to the owner's profile mobile
+  //  • totp  — 6-digit code from their enrolled authenticator app
+  let otpResult: Awaited<ReturnType<typeof verifyOtp>> | { ok: true; provided: true } = {
+    ok: false,
+    error: "",
+  };
+
+  if (String(body?.method ?? "sms") === "totp") {
+    const supabase = await createSupabaseServerClient();
+    const { data: row } = await supabase
+      .from("totp_secrets")
+      .select("secret_cipher, confirmed")
+      .eq("user_id", session.sub)
+      .maybeSingle();
+
+    if (row?.confirmed !== true || !row.secret_cipher) {
+      otpResult = { ok: false, error: "No authenticator is enrolled. Use the SMS code or set one up on the Profile page." };
+    } else {
+      const { secret } = await decryptTotpSecret(row.secret_cipher);
+      otpResult = verifyTotp(secret, String(body?.code ?? ""))
+        ? { ok: true, provided: true }
+        : { ok: false, error: "Wrong code — enter the current number from the authenticator app." };
+    }
+  } else {
+    otpResult = await verifyOtp(session.sub, purpose, String(body?.code ?? ""));
+  }
+
+  const result = otpResult;
   if (!result.ok) {
     return NextResponse.json(
-      { success: false, error: result.error, lockout: result.lockout },
+      { success: false, error: result.error, lockout: "lockout" in result ? result.lockout : undefined },
       { status: 400 }
     );
   }

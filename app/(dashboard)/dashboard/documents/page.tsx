@@ -19,6 +19,12 @@ import {
   ShieldCheck,
   BookmarkPlus,
   DownloadCloud,
+  Share2,
+  Copy,
+  Link2,
+  Ban,
+  KeyRound,
+  Smartphone,
 } from 'lucide-react';
 import DigilockerPane from '@/components/dashboard/DigilockerPane';
 import type { Document as VaultDocument, DocumentType, RecordReference } from '@/lib/types';
@@ -74,6 +80,31 @@ export default function DocumentsPage() {
   const [otpDevCode, setOtpDevCode] = useState('');
   const [otpCooldown, setOtpCooldown] = useState(0);
   const [otpBusy, setOtpBusy] = useState(false);
+  // Authenticator codes work even without an SMS gateway.
+  const [totpEnrolled, setTotpEnrolled] = useState(false);
+  const [otpMethod, setOtpMethod] = useState<'sms' | 'totp'>('sms');
+
+  // Share links with expiry (public /s/<token> pages).
+  interface ShareView {
+    id: string;
+    scope: string;
+    label: string | null;
+    token: string;
+    expiresAt: string;
+    viewCount: number;
+    status: 'active' | 'revoked' | 'expired';
+  }
+  const [shareOpen, setShareOpen] = useState(false);
+  const [shareDoc, setShareDoc] = useState<VaultDocument | null>(null);
+  const [shareScope, setShareScope] = useState<'document' | 'vault'>('document');
+  const [shareDays, setShareDays] = useState(7);
+  const [shareLabel, setShareLabel] = useState('');
+  const [shareLink, setShareLink] = useState('');
+  const [shareBusy, setShareBusy] = useState(false);
+  const [shareError, setShareError] = useState('');
+  const [shareNotice, setShareNotice] = useState('');
+  const [shareList, setShareList] = useState<ShareView[] | null>(null);
+  const [copied, setCopied] = useState(false);
 
   // Official record lookup (RD number → government portal reference)
   const [tab, setTab] = useState<'uploaded' | 'records' | 'digilocker'>('uploaded');
@@ -281,9 +312,9 @@ export default function DocumentsPage() {
       if (r.status === 403) {
         const data = await r.json().catch(() => ({}));
         if (data?.otpRequired) {
-          // Lock engaged — start (or continue) the SMS verification flow.
+          // Lock engaged — start (or continue) the verification flow.
           setPreviewLoading(false);
-          if (!retry) setOtpTarget({ doc, download });
+          if (!retry) await openOtpModal(doc, download);
           else setOtpError('The code could not be verified. Try again.');
           return;
         }
@@ -329,6 +360,20 @@ export default function DocumentsPage() {
     await openFile(doc, true, false);
   }
 
+  async function openOtpModal(doc: VaultDocument, download: boolean) {
+    setOtpTarget({ doc, download });
+    setOtpMethod('sms');
+    setTotpEnrolled(false);
+    // The modal can offer "Use authenticator app" when one is enrolled.
+    try {
+      const r = await fetch('/api/security/totp');
+      const data = await r.json();
+      if (r.ok && data.success && data.enrolled) setTotpEnrolled(true);
+    } catch {
+      // Status is a nice-to-have; SMS stays the default path.
+    }
+  }
+
   async function handleOtpRequest() {
     setOtpBusy(true);
     setOtpError('');
@@ -363,7 +408,7 @@ export default function DocumentsPage() {
       const r = await fetch('/api/otp/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: otpCode, purpose: 'vault-file' }),
+        body: JSON.stringify({ code: otpCode, purpose: 'vault-file', method: otpMethod }),
       });
       const data = await r.json();
       if (!r.ok || !data.success) {
@@ -389,6 +434,87 @@ export default function DocumentsPage() {
     setOtpCode('');
     setOtpError('');
     setOtpDevCode('');
+  }
+
+  // ----- Share links with expiry -----
+
+  const loadShares = useCallback(async () => {
+    try {
+      const r = await fetch('/api/shares');
+      const data = await r.json();
+      if (r.ok && data.success) setShareList(data.shares as ShareView[]);
+      else setShareList([]);
+    } catch {
+      setShareList([]);
+    }
+  }, []);
+
+  async function openShare(doc: VaultDocument) {
+    setShareDoc(doc);
+    setShareScope('document');
+    setShareDays(7);
+    setShareLabel(doc.name ?? '');
+    setShareLink('');
+    setShareError('');
+    setShareNotice('');
+    setShareOpen(true);
+    setShareList(null);
+    await loadShares();
+  }
+
+  async function createShare() {
+    if (!shareDoc) return;
+    setShareBusy(true);
+    setShareError('');
+    try {
+      const r = await fetch('/api/shares', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          scope: shareScope,
+          documentId: shareScope === 'document' ? shareDoc.id : undefined,
+          expiresInDays: shareDays,
+          label: shareLabel,
+        }),
+      });
+      const data = await r.json();
+      if (!r.ok || !data.success) {
+        setShareError(data.error ?? 'Could not create the share link.');
+        return;
+      }
+      setShareLink(`${window.location.origin}/s/${data.share.token}`);
+      setShareNotice('Link created! Anyone with it can view until ' + new Date(data.share.expiresAt).toLocaleDateString('en-IN') + '.');
+      await loadShares();
+    } catch {
+      setShareError('Network error while creating the link.');
+    } finally {
+      setShareBusy(false);
+    }
+  }
+
+  async function revokeShare(id: string) {
+    try {
+      await fetch(`/api/shares/${id}`, { method: 'DELETE' });
+      setShareNotice('');
+      await loadShares();
+    } catch {
+      // The list refresh simply won't show the change if this fails.
+    }
+  }
+
+  function copyShareLink() {
+    if (!shareLink) return;
+    navigator.clipboard.writeText(shareLink).then(
+      () => { setCopied(true); setTimeout(() => setCopied(false), 1500); },
+      () => setShareError('Could not copy — select the link text manually.')
+    );
+  }
+
+  function closeShareModal() {
+    setShareOpen(false);
+    setShareLink('');
+    setShareError('');
+    setShareNotice('');
   }
 
   async function handleDelete() {
@@ -547,6 +673,14 @@ export default function DocumentsPage() {
                   className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-gray-200 py-2 text-xs font-semibold text-gray-600 transition-colors hover:border-blue-300 hover:text-blue-700"
                 >
                   <Eye className="h-3.5 w-3.5" /> View
+                </button>
+                <button
+                  onClick={() => openShare(doc)}
+                  className="flex items-center justify-center gap-1.5 rounded-xl border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-600 transition-colors hover:border-blue-300 hover:text-blue-700"
+                  aria-label={`Share ${doc.name}`}
+                  title="Create a time-limited share link"
+                >
+                  <Share2 className="h-3.5 w-3.5" />
                 </button>
                 <button
                   onClick={() => downloadDoc(doc)}
@@ -906,9 +1040,27 @@ export default function DocumentsPage() {
             </div>
 
             {otpStage === 'request' ? (
-              <button onClick={handleOtpRequest} disabled={otpBusy || otpCooldown > 0} className="btn-primary w-full">
-                {otpBusy ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : otpCooldown > 0 ? `Resend available in ${otpCooldown}s` : 'Send code'}
-              </button>
+              <div className="space-y-2">
+                {totpEnrolled && (
+                  <button
+                    onClick={() => { setOtpMethod('totp'); setOtpStage('verify'); setOtpCode(''); setOtpError(''); }}
+                    className="w-full"
+                  >
+                    <span className="btn-primary flex w-full items-center justify-center gap-2">
+                      <KeyRound className="h-4 w-4" /> Use authenticator app
+                    </span>
+                  </button>
+                )}
+                <button onClick={handleOtpRequest} disabled={otpBusy || otpCooldown > 0} className="btn-secondary flex w-full items-center justify-center gap-2">
+                  {otpBusy ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : <Smartphone className="h-4 w-4" />}
+                  {otpCooldown > 0 ? (totpEnrolled ? 'SMS code (resend in ' + otpCooldown + 's)' : 'Resend available in ' + otpCooldown + 's') : 'Send SMS code'}
+                </button>
+                {!totpEnrolled && (
+                  <p className="text-center text-[11px] text-gray-400">
+                    Tip: set up the authenticator app on your Profile page to verify without SMS.
+                  </p>
+                )}
+              </div>
             ) : (
               <form onSubmit={(e) => { e.preventDefault(); handleOtpVerify(); }} className="space-y-3">
                 {otpDevCode && (
@@ -932,9 +1084,22 @@ export default function DocumentsPage() {
                 <button type="submit" disabled={otpBusy || otpCode.length !== 6} className="btn-primary w-full">
                   {otpBusy ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : 'Verify & open'}
                 </button>
-                <button type="button" onClick={handleOtpRequest} disabled={otpBusy || otpCooldown > 0} className="w-full text-center text-xs font-semibold text-blue-700 underline">
-                  {otpCooldown > 0 ? `Resend code in ${otpCooldown}s` : 'Resend code'}
-                </button>
+                {otpMethod === 'sms' ? (
+                  <div className="flex items-center justify-between text-xs">
+                    <button type="button" onClick={handleOtpRequest} disabled={otpBusy || otpCooldown > 0} className="font-semibold text-blue-700 underline">
+                      {otpCooldown > 0 ? `Resend code in ${otpCooldown}s` : 'Resend code'}
+                    </button>
+                    {totpEnrolled && (
+                      <button type="button" onClick={() => { setOtpMethod('totp'); setOtpCode(''); setOtpError(''); }} className="font-semibold text-blue-700 underline">
+                        Use authenticator instead
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <button type="button" onClick={() => { setOtpMethod('sms'); setOtpCode(''); setOtpError(''); }} className="w-full text-center text-xs font-semibold text-blue-700 underline">
+                    Use an SMS code instead
+                  </button>
+                )}
               </form>
             )}
 
@@ -947,6 +1112,97 @@ export default function DocumentsPage() {
             </p>
 
             <button onClick={dismissOtp} className="btn-secondary mt-2 w-full">Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {shareOpen && shareDoc && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true">
+          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50">
+                  <Share2 className="h-5 w-5 text-blue-700" />
+                </span>
+                <div>
+                  <h2 className="text-base font-bold text-gray-900">Share a link</h2>
+                  <p className="text-[11px] text-gray-500">Time-boxed access for brokers, hospitals, banks — no account needed.</p>
+                </div>
+              </div>
+              <button onClick={closeShareModal} className="text-gray-400 hover:text-gray-600" aria-label="Close"><X className="h-5 w-5" /></button>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label htmlFor="sh-scope" className="label">What to share</label>
+                <select id="sh-scope" value={shareScope} onChange={(e) => setShareScope(e.target.value === 'vault' ? 'vault' : 'document')} className="input-field">
+                  <option value="document">Only “{shareDoc.name}”</option>
+                  <option value="vault">My entire vault</option>
+                </select>
+              </div>
+              <div>
+                <label htmlFor="sh-days" className="label">Expires after</label>
+                <select id="sh-days" value={shareDays} onChange={(e) => setShareDays(Number(e.target.value))} className="input-field">
+                  <option value={1}>1 day</option>
+                  <option value={7}>7 days</option>
+                  <option value={30}>30 days</option>
+                  <option value={90}>90 days</option>
+                </select>
+              </div>
+            </div>
+            <div className="mt-3">
+              <label htmlFor="sh-label" className="label">Name on the link</label>
+              <input id="sh-label" value={shareLabel} onChange={(e) => setShareLabel(e.target.value.slice(0, 80))} className="input-field" placeholder="How the viewer will see it" />
+            </div>
+
+            <button onClick={createShare} disabled={shareBusy} className="btn-primary mt-4 w-full">
+              {shareBusy ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : 'Create share link'}
+            </button>
+
+            {shareLink && (
+              <div className="mt-3 rounded-xl border border-green-200 bg-green-50 p-3">
+                <p className="break-all text-xs font-semibold text-green-900">{shareLink}</p>
+                <button onClick={copyShareLink} className="btn-secondary mt-2 flex w-full items-center justify-center gap-2">
+                  <Copy className="h-3.5 w-3.5" /> {copied ? 'Copied!' : 'Copy link'}
+                </button>
+              </div>
+            )}
+
+            {shareNotice && <p className="mt-3 text-[11px] text-gray-500">{shareNotice}</p>}
+            {shareError && (
+              <p className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{shareError}</p>
+            )}
+
+            {/* Active links */}
+            {shareList !== null && shareList.length > 0 && (
+              <div className="mt-5">
+                <h3 className="text-xs font-bold uppercase tracking-wide text-gray-400">Your share links</h3>
+                <ul className="mt-2 space-y-2">
+                  {shareList.slice(0, 8).map((s) => (
+                    <li key={s.id} className="flex items-center justify-between gap-3 rounded-xl border border-gray-100 px-3 py-2">
+                      <div className="min-w-0">
+                        <p className="truncate text-xs font-semibold text-gray-800">{s.label || (s.scope === 'vault' ? 'Whole vault' : 'A document')}</p>
+                        <p className="text-[10px] text-gray-500">
+                          {s.scope === 'vault' ? 'Whole vault' : 'One document'} · until {new Date(s.expiresAt).toLocaleDateString('en-IN')} · {s.viewCount} views · {s.status}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-1">
+                        <a href={`/s/${s.token}`} target="_blank" rel="noopener noreferrer" className="rounded-lg p-1.5 text-blue-600 hover:bg-blue-50" aria-label="Open link"><Link2 className="h-4 w-4" /></a>
+                        {s.status === 'active' && (
+                          <button onClick={() => revokeShare(s.id)} className="rounded-lg p-1.5 text-red-500 hover:bg-red-50" aria-label="Turn off sharing" title="Stop sharing now">
+                            <Ban className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <p className="mt-4 text-[11px] leading-relaxed text-gray-400">
+              The link opens a read-only page. Nothing in the vault can be edited or deleted through it, and you can cut any link off instantly.
+            </p>
           </div>
         </div>
       )}

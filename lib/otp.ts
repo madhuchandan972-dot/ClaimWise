@@ -268,7 +268,7 @@ export async function verifyOtp(
 // Elevation cookie (AES-256-GCM via jose, 5 minutes)
 // ----------------------------------------------------------------
 
-function elevationKey(): Uint8Array {
+export function elevationKey(): Uint8Array {
   const secret = (
     process.env.OTP_ELEVATION_SECRET ||
     process.env.DIGILOCKER_STATE_SECRET ||

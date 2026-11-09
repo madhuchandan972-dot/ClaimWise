@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Loader2, CheckCircle2, AlertCircle, UserRound } from 'lucide-react';
 import Badge from '@/components/ui/Badge';
 import ProgressBar from '@/components/ui/ProgressBar';
+import SecurityPanel from '@/components/dashboard/SecurityPanel';
 import type { User } from '@/lib/types';
 
 interface ProfileResponse {
@@ -283,6 +284,12 @@ export default function ProfilePage() {
           engine. They are stored in your Supabase profile and protected by Row Level Security.
           Nothing is pre-filled and nothing is shared with another account.
         </p>
+      </div>
+
+      {/* Security — authenticator lock (TOTP) */}
+      <div className="pt-2">
+        <h2 className="mb-2 px-1 text-[11px] font-bold uppercase tracking-wider text-gray-400">Security</h2>
+        <SecurityPanel />
       </div>
     </div>
   );
