@@ -27,6 +27,7 @@ import type {
   Application,
   Notification,
   ApplicationStatus,
+  RecordReference,
 } from "./types";
 import { createSupabaseServerClient } from "./supabase/server";
 import type { SupabaseServerClient } from "./supabase/server";
@@ -637,6 +638,93 @@ export function cleanupExpiredFiles(): void {
   // Storage lifecycle rules handle TTL cleanup server-side; the row
   // and the bucket share the lifecycle. Intentional no-op, as before.
 }
+
+// ----------------------------------------------------------------
+// Official record references (RD-number lookup saved in the vault)
+//
+// These are NOT files: they are references to government portals
+// (links + the exact details to enter there). The document itself
+// is always downloaded by the user from the official server.
+// ----------------------------------------------------------------
+
+type RecordRefRow = {
+  id: string;
+  user_id: string;
+  name: string;
+  state_code: string;
+  entry_id: string;
+  values: Record<string, string> | null;
+  created_at: string;
+};
+
+function rowToRecordReference(row: RecordRefRow): RecordReference {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    name: row.name,
+    stateCode: row.state_code,
+    entryId: row.entry_id,
+    values: row.values ?? {},
+    createdAt: row.created_at,
+  };
+}
+
+/** All lookup references saved by this user, newest first. */
+export async function listRecordReferences(userId: string): Promise<RecordReference[]> {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("record_references")
+    .select("*")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false });
+
+  if (error) throw dbError("listRecordReferences", error);
+  return (data ?? []).map((row) => rowToRecordReference(row as RecordRefRow));
+}
+
+/** Saves an official-portal lookup reference owned by the caller. */
+export async function addRecordReference(
+  userId: string,
+  input: { name: string; stateCode: string; entryId: string; values: Record<string, string> }
+): Promise<RecordReference | { error: string }> {
+  const supabase = await createSupabaseServerClient();
+
+  const record = {
+    id: uid("ref"),
+    user_id: userId,
+    name: input.name.trim().slice(0, 160),
+    state_code: input.stateCode.trim().slice(0, 8),
+    entry_id: input.entryId.trim().slice(0, 64),
+    values: input.values,
+    created_at: new Date().toISOString(),
+  };
+
+  const { data, error } = await supabase
+    .from("record_references")
+    .insert(record)
+    .select("*")
+    .single();
+
+  if (error) {
+    const e = dbError("addRecordReference", error);
+    return { error: e.message };
+  }
+  return rowToRecordReference(data as RecordRefRow);
+}
+
+/** Deletes a saved reference; returns false when it doesn't exist. */
+export async function deleteRecordReference(refId: string, userId: string): Promise<boolean> {
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase
+    .from("record_references")
+    .delete()
+    .eq("id", refId)
+    .eq("user_id", userId);
+
+  if (error) throw dbError("deleteRecordReference", error);
+  return true;
+}
+
 
 // ----------------------------------------------------------------
 // Scholarships (read-only catalogue in public.scholarships)

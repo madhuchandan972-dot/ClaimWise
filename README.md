@@ -39,6 +39,12 @@ scholarships are inserted by the application. Every new account starts with an e
 - lucide-react icons
 - Vercel-compatible deployment
 
+Documents can also be found without scanning: the **Official records (RD lookup)** tab in
+the Documents page takes a state + registration (RD) number and returns a reference card
+linking only to official government portals (Kaveri, IGRS, TNREGINET, Bhulekh, e-District…).
+ClaimWise never scrapes, proxies or hosts these files — the user downloads the document
+directly from the government's own server, and can save the reference in the vault.
+
 ## 3. Setup
 
 ```bash
@@ -54,6 +60,8 @@ Run these SQL files **in order** in Supabase → SQL editor:
 3. `supabase/migrations/003_family_vault.sql` — **required for this version**: properties,
    financial records, insurance, emergency contacts, family members/invitations, saved
    scholarships, family read access and scholarship verification columns.
+4. `supabase/migrations/006_record_references.sql` — **required for the RD-number lookup**:
+   the `record_references` table (with RLS) that stores saved official-portal references.
 
 Restart the dev server after the migrations so the schema cache refreshes.
 

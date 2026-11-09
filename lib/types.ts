@@ -68,6 +68,23 @@ export interface Document {
 }
 
 // ----------------------------------------------------------------
+// Official record lookup (RD-number reference saved in the vault)
+// ----------------------------------------------------------------
+export interface RecordReference {
+  id: string;
+  userId: string;
+  /** Auto-generated label, e.g. "Registered deed (document search) · RD-123-2021". */
+  name: string;
+  /** State code this lookup belongs to, e.g. "KA". */
+  stateCode: string;
+  /** Registry entry id, e.g. "ka-deed" (see lib/record-lookup.ts). */
+  entryId: string;
+  /** Sanitised field values entered by the user (doc number, year…). */
+  values: Record<string, string>;
+  createdAt: string;
+}
+
+// ----------------------------------------------------------------
 // Scholarship
 // ----------------------------------------------------------------
 export type ScholarshipStatus = "open" | "closing-soon" | "closed" | "upcoming";
