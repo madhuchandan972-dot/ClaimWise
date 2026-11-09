@@ -21,6 +21,7 @@ import {
   LogOut,
   Loader2,
   Sparkles,
+  AlertOctagon,
 } from 'lucide-react';
 
 interface SessionUser {
@@ -40,6 +41,7 @@ const NAV_GROUPS = [
       { href: '/dashboard/insurance', label: 'Insurance', icon: ShieldCheck },
       { href: '/dashboard/insurance/claim-advisor', label: 'Claim Advisor (AI)', icon: Sparkles },
       { href: '/dashboard/emergency-contacts', label: 'Emergency Contacts', icon: PhoneCall },
+      { href: '/dashboard/emergency-sos', label: 'Emergency SOS 🚨', icon: AlertOctagon },
       { href: '/dashboard/family-access', label: 'Family Access', icon: Users },
       { href: '/dashboard/settings', label: 'Settings', icon: Settings },
     ],
@@ -150,7 +152,17 @@ export default function DashboardShell({ children }: { children: React.ReactNode
           </div>
         </Link>
 
-        <nav className="flex-1 overflow-y-auto px-3 py-4 scrollbar-thin">{nav}</nav>
+        <div className="px-3 pt-3">
+          <Link
+            href="/dashboard/emergency-sos"
+            className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 px-3 py-2.5 text-xs font-black uppercase tracking-wider text-white shadow-lg shadow-red-900/50 hover:from-red-500 hover:to-rose-500 transition-all hover:scale-[1.02]"
+          >
+            <AlertOctagon className="h-4 w-4 animate-bounce" />
+            <span>Emergency SOS 🚨</span>
+          </Link>
+        </div>
+
+        <nav className="flex-1 overflow-y-auto px-3 py-3 scrollbar-thin">{nav}</nav>
 
         <div className="border-t border-white/10 p-4">
           <div className="flex items-center gap-3">
@@ -185,13 +197,22 @@ export default function DashboardShell({ children }: { children: React.ReactNode
           />
           <span className="text-base font-bold text-blue-950">ClaimWise</span>
         </Link>
-        <button
-          onClick={() => setMobileOpen((v) => !v)}
-          className="rounded-xl p-2 text-gray-700 hover:bg-gray-100"
-          aria-label="Toggle menu"
-        >
-          {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-        </button>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/dashboard/emergency-sos"
+            className="flex items-center gap-1.5 rounded-lg bg-red-600 px-2.5 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-red-700"
+          >
+            <AlertOctagon className="h-3.5 w-3.5" />
+            <span>SOS</span>
+          </Link>
+          <button
+            onClick={() => setMobileOpen((v) => !v)}
+            className="rounded-xl p-2 text-gray-700 hover:bg-gray-100"
+            aria-label="Toggle menu"
+          >
+            {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </button>
+        </div>
 
         <div
           className={`absolute left-0 right-0 top-14 overflow-hidden border-b border-gray-200 bg-blue-950 shadow-lg transition-all duration-200 ${

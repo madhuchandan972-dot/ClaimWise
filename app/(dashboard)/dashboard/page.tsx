@@ -17,6 +17,7 @@ import {
   AlertTriangle,
   CalendarClock,
   Printer,
+  AlertOctagon,
 } from 'lucide-react';
 import StatsCard from '@/components/ui/StatsCard';
 import { daysUntil } from '@/lib/dates';
@@ -50,6 +51,7 @@ interface DateReminderView {
 }
 
 const QUICK_ACTIONS = [
+  { href: '/dashboard/emergency-sos', label: 'Emergency SOS 🚨', desc: 'Instant WhatsApp broadcast with live GPS & health policy', icon: AlertOctagon },
   { href: '/dashboard/documents', label: 'Upload a document', desc: 'Aadhaar, PAN, property, insurance and more', icon: FolderOpen },
   { href: '/dashboard/property', label: 'Add property', desc: 'Keep ownership and registration details safe', icon: Building2 },
   { href: '/dashboard/insurance', label: 'Add insurance', desc: 'Policies, numbers and expiry dates', icon: ShieldCheck },

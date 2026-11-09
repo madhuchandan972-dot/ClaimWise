@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { PhoneCall, Plus, Pencil, Trash2, Loader2, AlertTriangle, Mail, Phone, Printer } from 'lucide-react';
+import Link from 'next/link';
+import { PhoneCall, Plus, Pencil, Trash2, Loader2, AlertTriangle, Mail, Phone, Printer, AlertOctagon } from 'lucide-react';
 import Modal from '@/components/ui/Modal';
 import type { EmergencyContact } from '@/lib/types';
 
@@ -112,6 +113,9 @@ export default function EmergencyContactsPage() {
           </p>
         </div>
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+          <Link href="/dashboard/emergency-sos" className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-red-700 sm:w-auto">
+            <AlertOctagon className="h-4 w-4" /> Trigger SOS Broadcast
+          </Link>
           <a href="/dashboard/emergency-card" className="btn-secondary inline-flex w-full items-center justify-center gap-2 sm:w-auto">
             <Printer className="h-4 w-4" /> Emergency card
           </a>
