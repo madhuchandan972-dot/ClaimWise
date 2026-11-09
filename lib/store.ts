@@ -63,6 +63,13 @@ const DOCUMENTS_BUCKET = "documents";
 
 type Db = SupabaseServerClient;
 
+/** Accepts only YYYY-MM-DD (or empty); guard against junk in query params. */
+function cleanExpiry(value?: string): string | null {
+  const s = (value ?? "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+  return Number.isNaN(new Date(`${s}T00:00:00`).getTime()) ? null : s;
+}
+
 interface Workspace {
   userId: string;
   profile: User;
@@ -336,10 +343,11 @@ type DocRow = {
   size: number;
   uploaded_at: string;
   status: Document["status"];
-  // description / original_name are added in migration 003; older rows
-  // fall back to empty strings in rowToDocument.
+  // description / original_name are added in migration 003, expiry_date
+  // in 007; older rows fall back to undefined in rowToDocument.
   description: string | null;
   original_name: string | null;
+  expiry_date: string | null;
   extracted_data: Record<string, string> | null;
   extraction_mode: Document["extractionMode"] | null;
   reviewed: boolean | null;
@@ -358,6 +366,7 @@ function rowToDocument(row: DocRow): Document {
     description: row.description ?? "",
     originalName: row.original_name ?? "",
     extractedData: row.extracted_data ?? undefined,
+    expiryDate: row.expiry_date ?? undefined,
     extractionMode: row.extraction_mode ?? undefined,
     reviewed: row.reviewed ?? undefined,
   };
@@ -434,7 +443,7 @@ export async function addDocument(
   size: number,
   type: Document["type"],
   fileBuffer: Buffer,
-  options: { description?: string; originalName?: string } = {}
+  options: { description?: string; originalName?: string; expiryDate?: string } = {}
 ): Promise<AddDocumentResult> {
   const supabase = await createSupabaseServerClient();
 
@@ -469,6 +478,7 @@ export async function addDocument(
       status: "pending",
       description: (options.description ?? "").slice(0, 1000),
       original_name: (options.originalName ?? name).slice(0, 255),
+      expiry_date: cleanExpiry(options.expiryDate),
     })
     .select("*")
     .single();
@@ -619,6 +629,7 @@ export async function updateDocument(
   if (updates.extractionMode !== undefined) patch.extraction_mode = updates.extractionMode;
   if (updates.reviewed !== undefined) patch.reviewed = updates.reviewed;
   if (updates.name !== undefined) patch.name = updates.name;
+  if (updates.expiryDate !== undefined) patch.expiry_date = cleanExpiry(updates.expiryDate);
 
   if (Object.keys(patch).length === 0) return getDocument(docId, userId);
 

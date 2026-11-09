@@ -65,6 +65,27 @@ export interface Document {
   extractedData?: Record<string, string>;
   extractionMode?: "gemini" | "simulated";
   reviewed?: boolean;
+  /** Optional validity end date (e.g. passport, policy copy) — ISO yyyy-mm-dd. */
+  expiryDate?: string;
+}
+
+// ----------------------------------------------------------------
+// Dates to remember (vault reminders engine, shared)
+// ----------------------------------------------------------------
+export type DateReminderKind = "insurance-expiry" | "due-date" | "document-expiry";
+
+export interface DateReminder {
+  /** Stable key: `${kind}-${recordId}`. */
+  key: string;
+  kind: DateReminderKind;
+  /** Human label, e.g. "HDFC Life — Term plan". */
+  title: string;
+  /** One-line context, e.g. "Premium policy expires" / "Payment due". */
+  detail: string;
+  /** ISO date (yyyy-mm-dd). */
+  date: string;
+  /** Same-origin link of the owning section. */
+  link: string;
 }
 
 // ----------------------------------------------------------------

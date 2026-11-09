@@ -15,8 +15,10 @@ import {
   Circle,
   Loader2,
   AlertTriangle,
+  CalendarClock,
 } from 'lucide-react';
 import StatsCard from '@/components/ui/StatsCard';
+import { daysUntil } from '@/lib/dates';
 
 interface Overview {
   documents: number;
@@ -27,6 +29,7 @@ interface Overview {
   familyMembers: number;
   pendingInvitations: number;
   savedScholarships: number;
+  dateReminders?: DateReminderView[];
 }
 
 interface Response {
@@ -34,6 +37,15 @@ interface Response {
   overview: Overview;
   user: { name: string; email: string };
   error?: string;
+}
+
+interface DateReminderView {
+  key: string;
+  kind: string;
+  title: string;
+  detail: string;
+  date: string;
+  link: string;
 }
 
 const QUICK_ACTIONS = [
@@ -189,6 +201,8 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      <DatesToRememberCard reminders={o.dateReminders ?? []} />
+
       <div>
         <h2 className="mb-3 text-sm font-bold text-gray-800">Quick actions</h2>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -218,6 +232,63 @@ export default function DashboardPage() {
           they cannot edit or delete your records, and every request is checked on the server.
         </p>
       </div>
+    </div>
+  );
+}
+
+function DatesToRememberCard({ reminders }: { reminders: DateReminderView[] }) {
+  return (
+    <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="flex items-center gap-2 text-sm font-bold text-gray-800">
+          <CalendarClock className="h-4 w-4 text-amber-600" /> Dates to remember
+        </h2>
+        <span className="text-xs font-semibold text-gray-500">next 45 days</span>
+      </div>
+
+      {reminders.length === 0 ? (
+        <p className="text-xs leading-relaxed text-gray-500">
+          Nothing due in the next 45 days. Add expiry dates to documents, policies and payment
+          dues — ClaimWise will surface them here and notify you as they approach.
+        </p>
+      ) : (
+        <ul className="space-y-2.5">
+          {reminders.map((r) => {
+            const days = daysUntil(r.date);
+            const expired = days !== null && days < 0;
+            const soon = days !== null && days >= 0 && days <= 7;
+            const dot = expired ? 'bg-red-500' : soon ? 'bg-amber-500' : 'bg-blue-500';
+            const when =
+              days === null
+                ? ''
+                : expired
+                  ? `${Math.abs(days)}d overdue`
+                  : days === 0
+                    ? 'today'
+                    : `in ${days}d`;
+            return (
+              <li key={r.key}>
+                <Link href={r.link} className="flex items-center gap-3 rounded-xl border border-gray-100 px-3 py-2.5 transition-colors hover:border-amber-200">
+                  <span className={`h-2 w-2 shrink-0 rounded-full ${dot}`} aria-hidden />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold text-gray-800">{r.title}</span>
+                    <span className="block truncate text-xs text-gray-500">{r.detail}</span>
+                  </span>
+                  <span className="shrink-0 text-right">
+                    <span className={`block text-xs font-bold ${expired ? 'text-red-600' : soon ? 'text-amber-600' : 'text-gray-600'}`}>
+                      {when}
+                    </span>
+                    <span className="block text-[11px] text-gray-400">
+                      {new Date(`${r.date.slice(0, 10)}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                    </span>
+                  </span>
+                  <ArrowRight className="ml-1 h-3.5 w-3.5 shrink-0 text-gray-300" />
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </div>
   );
 }

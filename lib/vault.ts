@@ -12,7 +12,10 @@
 // ============================================================
 
 import { createSupabaseServerClient } from "./supabase/server";
+import { listDocuments } from "./store";
+import { collectDateReminders, daysUntil } from "./dates";
 import type {
+  DateReminder,
   EmergencyContact,
   FamilyInvitation,
   FamilyMember,
@@ -844,6 +847,10 @@ export async function unsaveScholarship(
 // Overview counts
 // ----------------------------------------------------------------
 
+// ----------------------------------------------------------------
+// Dates to remember (vault reminder engine inputs)
+// ----------------------------------------------------------------
+
 export interface VaultOverview {
   documents: number;
   properties: number;
@@ -853,6 +860,8 @@ export interface VaultOverview {
   familyMembers: number;
   pendingInvitations: number;
   savedScholarships: number;
+  /** Dated obligations within 45 days (and anything expired), date-sorted. */
+  dateReminders: DateReminder[];
 }
 
 async function countRows(
@@ -874,14 +883,17 @@ async function countRows(
 
 export async function getVaultOverview(userId: string): Promise<VaultOverview> {
   const [
-    documents,
+    documentsCount,
     properties,
-    financialRecords,
-    insuranceRecords,
+    financialRecordsCount,
+    insuranceRecordsCount,
     emergencyContacts,
     familyMembers,
     pendingInvitations,
     savedScholarships,
+    documents,
+    financialRecords,
+    insuranceRecords,
   ] = await Promise.all([
     countRows("documents", "user_id", userId),
     countRows("properties", "user_id", userId),
@@ -894,16 +906,29 @@ export async function getVaultOverview(userId: string): Promise<VaultOverview> {
       value: "pending",
     }),
     countRows("saved_scholarships", "user_id", userId),
+    listDocuments(userId),
+    listFinancialRecords(userId),
+    listInsuranceRecords(userId),
   ]);
 
+  // Dated obligations inside the look-ahead window (or already expired)
+  // — the dashboard card source. Kept in lib/dates so the notification
+  // engine shares the exact same rules.
+  const allReminders = collectDateReminders(documents, insuranceRecords, financialRecords);
+  const dateReminders = allReminders.filter((r) => {
+    const d = daysUntil(r.date);
+    return d !== null && d <= 45;
+  });
+
   return {
-    documents,
+    documents: documentsCount,
     properties,
-    financialRecords,
-    insuranceRecords,
+    financialRecords: financialRecordsCount,
+    insuranceRecords: insuranceRecordsCount,
     emergencyContacts,
     familyMembers,
     pendingInvitations,
     savedScholarships,
+    dateReminders,
   };
 }

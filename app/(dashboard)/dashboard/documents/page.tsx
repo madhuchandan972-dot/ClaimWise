@@ -25,6 +25,7 @@ import type { Document as VaultDocument, DocumentType, RecordReference } from '@
 import { formatFileSize, getDocumentIcon } from '@/lib/utils';
 import { documentLabel } from '@/lib/eligibility';
 import { RECORD_STATES, getLookupEntry, buildReference, fieldsFor, kindLabel, type BuiltReference } from '@/lib/record-lookup';
+import { daysUntil } from '@/lib/dates';
 
 const CATEGORIES: { value: DocumentType; label: string }[] = [
   { value: 'AadhaarCard', label: 'Aadhaar Document' },
@@ -50,6 +51,7 @@ export default function DocumentsPage() {
   const [uploadOpen, setUploadOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [uploadType, setUploadType] = useState<DocumentType>('AadhaarCard');
+  const [expiryDate, setExpiryDate] = useState('');
   const [description, setDescription] = useState('');
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -216,6 +218,7 @@ export default function DocumentsPage() {
   function resetUpload() {
     setTitle('');
     setUploadType('AadhaarCard');
+    setExpiryDate('');
     setDescription('');
     setUploadFile(null);
     setUploadError('');
@@ -234,6 +237,7 @@ export default function DocumentsPage() {
       fd.append('title', title.trim());
       fd.append('category', uploadType);
       fd.append('description', description.trim());
+      if (expiryDate) fd.append('expiryDate', expiryDate);
       fd.append('file', uploadFile);
       const r = await fetch('/api/documents', { method: 'POST', body: fd });
       const data = await r.json();
@@ -420,6 +424,7 @@ export default function DocumentsPage() {
                 {doc.fileType.toUpperCase()} · {formatFileSize(doc.size)} ·{' '}
                 {new Date(doc.uploadedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
               </p>
+              {doc.expiryDate && <DocExpiryBadge iso={doc.expiryDate} />}
               <div className="mt-4 flex gap-2 border-t border-gray-50 pt-3">
                 <button
                   onClick={() => openPreview(doc)}
@@ -682,6 +687,20 @@ export default function DocumentsPage() {
               </div>
 
               <div>
+                <label htmlFor="docExpiry" className="label">
+                  Expiry date <span className="font-normal text-gray-400">(optional — passport, DL, policy validity…)</span>
+                </label>
+                <input
+                  id="docExpiry"
+                  type="date"
+                  value={expiryDate}
+                  onChange={(e) => setExpiryDate(e.target.value)}
+                  className="input-field"
+                />
+                <p className="mt-1 text-[11px] text-gray-400">Used for expiry reminders on your dashboard.</p>
+              </div>
+
+              <div>
                 <label htmlFor="docDescription" className="label">Description <span className="font-normal text-gray-400">(optional)</span></label>
                 <textarea id="docDescription" value={description} onChange={(e) => setDescription(e.target.value)} maxLength={1000} rows={2} placeholder="Any notes about this document" className="input-field resize-none" />
               </div>
@@ -776,5 +795,24 @@ export default function DocumentsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+function DocExpiryBadge({ iso }: { iso: string }) {
+  const days = daysUntil(iso);
+  const label = new Date(`${iso.slice(0, 10)}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  const expired = days !== null && days < 0;
+  const soon = days !== null && days >= 0 && days <= 30;
+  const cls = expired
+    ? 'bg-red-50 text-red-700 border border-red-200'
+    : soon
+      ? 'bg-amber-50 text-amber-700 border border-amber-200'
+      : 'bg-gray-100 text-gray-600';
+  return (
+    <p className="mt-1.5">
+      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${cls}`}>
+        Valid till {label}{expired ? ' · expired' : soon ? ` · ${days === 0 ? 'today' : `${days}d left`}` : ''}
+      </span>
+    </p>
   );
 }

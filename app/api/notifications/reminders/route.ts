@@ -19,10 +19,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSessionFromRequest } from "@/lib/auth";
 import {
   listApplications,
+  listDocuments,
   listScholarships,
   listNotifications,
   pushNotificationOnce,
 } from "@/lib/store";
+import { listFinancialRecords, listInsuranceRecords } from "@/lib/vault";
+import { bucketFor, daysUntil, collectDateReminders } from "@/lib/dates";
 import { listSavedScholarships } from "@/lib/vault";
 import type { Application, Scholarship } from "@/lib/types";
 
@@ -191,6 +194,55 @@ export async function GET(request: NextRequest) {
     if (notification) {
       created.push({ applicationId: scholarship.id, title, bucket: bucket.key });
     }
+  }
+
+  // ── Family vault dates: insurance expiries, payment dues, document
+  // validity ends. Same day-bucket model and idempotent ids as the
+  // scholarship sweep above — a notification is created once per
+  // source record + bucket, never spammed.
+  try {
+    const [documents, insuranceRecords, financialRecords] = await Promise.all([
+      listDocuments(session.sub),
+      listInsuranceRecords(session.sub),
+      listFinancialRecords(session.sub),
+    ]);
+    const reminders = collectDateReminders(documents, insuranceRecords, financialRecords);
+
+    for (const reminder of reminders) {
+      const days = daysUntil(reminder.date, today);
+      if (days === null) continue;
+      const bucket = bucketFor(days);
+      if (!bucket) continue; // Outside all buckets (>30 days away)
+
+      const label = new Date(`${reminder.date.slice(0, 10)}T00:00:00`).toLocaleDateString("en-IN", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      });
+
+      let title: string;
+      let message: string;
+      if (bucket === "expired") {
+        const ago = Math.abs(days) === 1 ? "yesterday" : `${Math.abs(days)} days ago`;
+        title = `${reminder.title} — date passed`;
+        message = `${reminder.detail} on ${label} (${ago}). Open the linked section: update the date or act on it.`;
+      } else {
+        title = `${reminder.title}: ${days} days left`;
+        message = `${reminder.detail} — ${label}${days === 0 ? " (today)" : ` (in ${days} days)`}.`;
+      }
+
+      await pushNotificationOnce(
+        session.sub,
+        "reminder",
+        title,
+        message,
+        reminder.link,
+        `${reminder.key}-${bucket}`
+      );
+    }
+  } catch {
+    // Vault reminders are additive; a schema that hasn't run 003/007
+    // must never break the scholarship sweep above.
   }
 
   // Unread count after generation, so the sidebar badge stays honest.

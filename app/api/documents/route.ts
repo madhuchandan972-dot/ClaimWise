@@ -56,6 +56,7 @@ export async function POST(request: NextRequest) {
     const title = String(formData.get("title") ?? "").trim();
     const description = String(formData.get("description") ?? "").trim();
     const rawType = String(formData.get("category") ?? formData.get("type") ?? "Other");
+    const expiryDate = String(formData.get("expiryDate") ?? "").trim() || undefined;
 
     if (!(file instanceof File)) {
       return NextResponse.json(
@@ -116,7 +117,7 @@ export async function POST(request: NextRequest) {
       file.size,
       rawType as DocumentType,
       buffer,
-      { description, originalName: safeOriginalName }
+      { description, originalName: safeOriginalName, expiryDate }
     );
 
     if (!result.success) {
