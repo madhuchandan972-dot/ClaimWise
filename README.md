@@ -45,6 +45,13 @@ linking only to official government portals (Kaveri, IGRS, TNREGINET, Bhulekh, e
 ClaimWise never scrapes, proxies or hosts these files — the user downloads the document
 directly from the government's own server, and can save the reference in the vault.
 
+Documents can also be **locked behind an OTP check**: opening stored files as the owner
+requires a fresh 6-digit code sent by SMS to the owner's own profile mobile (Twilio or Msg91
+gateway; codes are sha256-hashed at rest, rate limited and never returned by the API). The
+approved window lasts 5 minutes and grants nothing else. Family members invited through
+Family Access keep their existing access. See `.env.example` for provider settings; in
+production the Documents page shows an honest "SMS not configured" path if no provider exists.
+
 For fully automatic fetching, the **DigiLocker** tab connects the user's OWN Aadhaar-linked
 DigiLocker account through the official partner OAuth flow. Their government-issued documents
 are then pulled straight from DigiLocker's servers into the private vault. Access tokens live

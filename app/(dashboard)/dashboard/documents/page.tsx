@@ -64,6 +64,17 @@ export default function DocumentsPage() {
   const [deleting, setDeleting] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
 
+  // OTP sensitive-action lock: opening stored file bytes requires a
+  // fresh code sent to the owner's own mobile (5-min elevation).
+  const [otpTarget, setOtpTarget] = useState<{ doc: VaultDocument; download: boolean } | null>(null);
+  const [otpStage, setOtpStage] = useState<'request' | 'verify'>('request');
+  const [otpCode, setOtpCode] = useState('');
+  const [otpError, setOtpError] = useState('');
+  const [otpPhone, setOtpPhone] = useState('');
+  const [otpDevCode, setOtpDevCode] = useState('');
+  const [otpCooldown, setOtpCooldown] = useState(0);
+  const [otpBusy, setOtpBusy] = useState(false);
+
   // Official record lookup (RD number → government portal reference)
   const [tab, setTab] = useState<'uploaded' | 'records' | 'digilocker'>('uploaded');
   const [refs, setRefs] = useState<RecordReference[] | null>(null);
@@ -111,8 +122,7 @@ export default function DocumentsPage() {
     }
   }, []);
 
-  const loadRefs = useCallback(async () => {
-    try {
+  const loadRefs = useCallback(async () => {    try {
       const r = await fetch('/api/record-lookup');
       const data = await r.json();
       if (!r.ok || !data.success) {
@@ -255,24 +265,130 @@ export default function DocumentsPage() {
     }
   }
 
-  async function openPreview(doc: VaultDocument) {
+  useEffect(() => {
+    if (!otpCooldown) return;
+    const t = setInterval(() => setOtpCooldown((c) => (c > 0 ? c - 1 : 0)), 1000);
+    return () => clearInterval(t);
+  }, [otpCooldown]);
+
+  async function openFile(doc: VaultDocument, download: boolean, retry: boolean) {
     setPreviewDoc(doc);
-    setPreviewError('');
+    if (download) setPreviewError('');
     setPreviewLoading(true);
     if (previewUrl) { URL.revokeObjectURL(previewUrl); setPreviewUrl(null); }
     try {
-      const r = await fetch(`/api/documents/${doc.id}/file`);
+      const r = await fetch(`/api/documents/${doc.id}/file${download ? '?download=1' : ''}`);
+      if (r.status === 403) {
+        const data = await r.json().catch(() => ({}));
+        if (data?.otpRequired) {
+          // Lock engaged — start (or continue) the SMS verification flow.
+          setPreviewLoading(false);
+          if (!retry) setOtpTarget({ doc, download });
+          else setOtpError('The code could not be verified. Try again.');
+          return;
+        }
+      }
       if (!r.ok) {
         const data = await r.json().catch(() => null);
         setPreviewError(data?.error ?? 'The stored file could not be loaded.');
         return;
       }
-      setPreviewUrl(URL.createObjectURL(await r.blob()));
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      setPreviewUrl(url);
+      setPreviewError('');
+      if (download) {
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = doc.name || 'document';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        // Keep preview usable too; the saved blob persists until revoked.
+      }
+      setOtpTarget(null);
     } catch {
       setPreviewError('Could not load the file preview.');
     } finally {
       setPreviewLoading(false);
     }
+  }
+
+  async function openPreview(doc: VaultDocument) {
+    setPreviewDoc(doc);
+    setPreviewError('');
+    setPreviewLoading(true);
+    if (previewUrl) { URL.revokeObjectURL(previewUrl); setPreviewUrl(null); }
+    await openFile(doc, false, false);
+  }
+
+  async function downloadDoc(doc: VaultDocument) {
+    setPreviewDoc(doc);
+    setPreviewError('');
+    setPreviewLoading(true);
+    await openFile(doc, true, false);
+  }
+
+  async function handleOtpRequest() {
+    setOtpBusy(true);
+    setOtpError('');
+    try {
+      const r = await fetch('/api/otp/request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ purpose: 'vault-file' }),
+      });
+      const data = await r.json();
+      if (!r.ok || !data.success) {
+        setOtpError(data.error ?? 'Could not send the code.');
+        return;
+      }
+      setOtpPhone(data.maskedPhone ?? '');
+      setOtpDevCode(data.devCode ?? '');
+      setOtpStage('verify');
+      setOtpCooldown(data.cooldownRemaining ?? 45);
+      setOtpError('');
+    } catch {
+      setOtpError('Network error while requesting the code.');
+    } finally {
+      setOtpBusy(false);
+    }
+  }
+
+  async function handleOtpVerify() {
+    if (!otpTarget) return;
+    setOtpBusy(true);
+    setOtpError('');
+    try {
+      const r = await fetch('/api/otp/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: otpCode, purpose: 'vault-file' }),
+      });
+      const data = await r.json();
+      if (!r.ok || !data.success) {
+        setOtpError(data.error ?? 'Verification failed.');
+        return;
+      }
+      const { doc, download } = otpTarget;
+      setOtpCode('');
+      setOtpStage('request');
+      setOtpDevCode('');
+      setOtpTarget(null);
+      await openFile(doc, download, true);
+    } catch {
+      setOtpError('Network error while verifying. Please try again.');
+    } finally {
+      setOtpBusy(false);
+    }
+  }
+
+  function dismissOtp() {
+    setOtpTarget(null);
+    setOtpStage('request');
+    setOtpCode('');
+    setOtpError('');
+    setOtpDevCode('');
   }
 
   async function handleDelete() {
@@ -432,13 +548,13 @@ export default function DocumentsPage() {
                 >
                   <Eye className="h-3.5 w-3.5" /> View
                 </button>
-                <a
-                  href={`/api/documents/${doc.id}/file?download=1`}
+                <button
+                  onClick={() => downloadDoc(doc)}
                   className="flex items-center justify-center gap-1.5 rounded-xl border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-600 transition-colors hover:border-blue-300 hover:text-blue-700"
                   aria-label={`Download ${doc.name}`}
                 >
                   <Download className="h-3.5 w-3.5" />
-                </a>
+                </button>
                 <button
                   onClick={() => setDeleteTarget(doc)}
                   className="flex items-center justify-center gap-1.5 rounded-xl border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-500 transition-colors hover:border-red-300 hover:text-red-600"
@@ -769,6 +885,68 @@ export default function DocumentsPage() {
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {otpTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
+            <div className="mb-3 flex items-center gap-3">
+              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50">
+                <ShieldCheck className="h-5 w-5 text-blue-700" />
+              </span>
+              <div>
+                <h2 className="text-base font-bold text-gray-900">Verify it&apos;s you</h2>
+                <p className="text-[11px] leading-relaxed text-gray-500">
+                  Opening <b>{otpTarget.doc.name}</b> needs a fresh one-time code sent to your own phone
+                  {otpPhone ? <span className="font-semibold"> ({otpPhone})</span> : ''}.
+                </p>
+              </div>
+            </div>
+
+            {otpStage === 'request' ? (
+              <button onClick={handleOtpRequest} disabled={otpBusy || otpCooldown > 0} className="btn-primary w-full">
+                {otpBusy ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : otpCooldown > 0 ? `Resend available in ${otpCooldown}s` : 'Send code'}
+              </button>
+            ) : (
+              <form onSubmit={(e) => { e.preventDefault(); handleOtpVerify(); }} className="space-y-3">
+                {otpDevCode && (
+                  <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] font-semibold text-amber-800">
+                    DEV MODE code: <code className="text-sm">{otpDevCode}</code>
+                  </p>
+                )}
+                <div>
+                  <label htmlFor="otpCode" className="label">6-digit code</label>
+                  <input
+                    id="otpCode"
+                    value={otpCode}
+                    onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    placeholder="••••••"
+                    maxLength={6}
+                    className="input-field text-center text-xl tracking-[0.5em]"
+                  />
+                </div>
+                <button type="submit" disabled={otpBusy || otpCode.length !== 6} className="btn-primary w-full">
+                  {otpBusy ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : 'Verify & open'}
+                </button>
+                <button type="button" onClick={handleOtpRequest} disabled={otpBusy || otpCooldown > 0} className="w-full text-center text-xs font-semibold text-blue-700 underline">
+                  {otpCooldown > 0 ? `Resend code in ${otpCooldown}s` : 'Resend code'}
+                </button>
+              </form>
+            )}
+
+            {otpError && (
+              <p className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{otpError}</p>
+            )}
+
+            <p className="mt-3 text-[11px] leading-relaxed text-gray-400">
+              The code is valid for 10 minutes and the opening window lasts 5 minutes. Nothing is stored on this device.
+            </p>
+
+            <button onClick={dismissOtp} className="btn-secondary mt-2 w-full">Cancel</button>
           </div>
         </div>
       )}
