@@ -18,7 +18,9 @@ import {
   ExternalLink,
   ShieldCheck,
   BookmarkPlus,
+  DownloadCloud,
 } from 'lucide-react';
+import DigilockerPane from '@/components/dashboard/DigilockerPane';
 import type { Document as VaultDocument, DocumentType, RecordReference } from '@/lib/types';
 import { formatFileSize, getDocumentIcon } from '@/lib/utils';
 import { documentLabel } from '@/lib/eligibility';
@@ -61,7 +63,7 @@ export default function DocumentsPage() {
   const fileInput = useRef<HTMLInputElement>(null);
 
   // Official record lookup (RD number → government portal reference)
-  const [tab, setTab] = useState<'uploaded' | 'records'>('uploaded');
+  const [tab, setTab] = useState<'uploaded' | 'records' | 'digilocker'>('uploaded');
   const [refs, setRefs] = useState<RecordReference[] | null>(null);
   const [refsError, setRefsError] = useState('');
   const [lookupStateCode, setLookupStateCode] = useState('');
@@ -70,9 +72,9 @@ export default function DocumentsPage() {
   const [built, setBuilt] = useState<BuiltReference | null>(null);
   const [savingRef, setSavingRef] = useState(false);
   const [refDelete, setRefDelete] = useState<RecordReference | null>(null);
+  const [dlgNotice, setDlgNotice] = useState('');
 
-  const loadDocs = useCallback(async () => {
-    try {
+  const loadDocs = useCallback(async () => {    try {
       const r = await fetch('/api/documents');
       const data = await r.json();
       if (!r.ok || !data.success) {
@@ -89,7 +91,23 @@ export default function DocumentsPage() {
   }, []);
 
   useEffect(() => { loadDocs(); }, [loadDocs]);
-  useEffect(() => () => { if (previewUrl) URL.revokeObjectURL(previewUrl); }, [previewUrl]);
+  useEffect(() => { if (previewUrl) URL.revokeObjectURL(previewUrl); }, [previewUrl]);
+
+  // DigiLocker OAuth landing: activate the tab and surface callback messages.
+  useEffect(() => {
+    try {
+      const p = new URLSearchParams(window.location.search);
+      const err = p.get('dlgError');
+      const refetch = p.get('dlgRefetch');
+      if (err || refetch) {
+        setDlgNotice(err ? decodeURIComponent(err) : '');
+        setTab('digilocker');
+        window.history.replaceState({}, '', '/dashboard/documents#digilocker');
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   const loadRefs = useCallback(async () => {
     try {
@@ -322,6 +340,15 @@ export default function DocumentsPage() {
         >
           <Globe className="h-4 w-4" /> Official records (RD lookup)
         </button>
+        <button
+          onClick={() => setTab('digilocker')}
+          aria-pressed={tab === 'digilocker'}
+          className={`flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold transition-colors ${
+            tab === 'digilocker' ? 'bg-emerald-700 text-white' : 'border border-gray-200 bg-white text-gray-600 hover:border-emerald-300 hover:text-emerald-700'
+          }`}
+        >
+          <DownloadCloud className="h-4 w-4" /> DigiLocker
+        </button>
       </div>
 
       {tab === 'uploaded' ? (
@@ -421,6 +448,8 @@ export default function DocumentsPage() {
       )}
 
       </>
+      ) : tab === 'digilocker' ? (
+        <DigilockerPane onSaved={loadDocs} startupNotice={dlgNotice} />
       ) : (
         <>
       <div className="flex items-start gap-2 rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3">

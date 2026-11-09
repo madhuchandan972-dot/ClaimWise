@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionFromRequest } from "@/lib/auth";
 import { getAiAvailability } from "@/lib/ai";
+import { isDigilockerConfigured } from "@/lib/digilocker";
 
 export async function GET(_request: NextRequest) {
   const session = await getSessionFromRequest(_request);
@@ -21,5 +22,6 @@ export async function GET(_request: NextRequest) {
       Boolean(process.env.GOOGLE_CLIENT_ID) && Boolean(process.env.GOOGLE_CLIENT_SECRET)
         ? "ready"
         : "not-configured",
+    digilocker: isDigilockerConfigured() ? "ready" : "not-configured",
   });
 }

@@ -45,6 +45,13 @@ linking only to official government portals (Kaveri, IGRS, TNREGINET, Bhulekh, e
 ClaimWise never scrapes, proxies or hosts these files — the user downloads the document
 directly from the government's own server, and can save the reference in the vault.
 
+For fully automatic fetching, the **DigiLocker** tab connects the user's OWN Aadhaar-linked
+DigiLocker account through the official partner OAuth flow. Their government-issued documents
+are then pulled straight from DigiLocker's servers into the private vault. Access tokens live
+only in a short-lived encrypted HttpOnly cookie — never in the database. Needs partner
+credentials from https://partners.digilocker.gov.in (see `.env.example`); without them the UI
+shows an honest "not enabled" state.
+
 ## 3. Setup
 
 ```bash
