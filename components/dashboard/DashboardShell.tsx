@@ -20,6 +20,7 @@ import {
   X,
   LogOut,
   Loader2,
+  Sparkles,
 } from 'lucide-react';
 
 interface SessionUser {
@@ -37,6 +38,7 @@ const NAV_GROUPS = [
       { href: '/dashboard/property', label: 'Property Details', icon: Building2 },
       { href: '/dashboard/financial', label: 'Financial Information', icon: Wallet },
       { href: '/dashboard/insurance', label: 'Insurance', icon: ShieldCheck },
+      { href: '/dashboard/insurance/claim-advisor', label: 'Claim Advisor (AI)', icon: Sparkles },
       { href: '/dashboard/emergency-contacts', label: 'Emergency Contacts', icon: PhoneCall },
       { href: '/dashboard/family-access', label: 'Family Access', icon: Users },
       { href: '/dashboard/settings', label: 'Settings', icon: Settings },
