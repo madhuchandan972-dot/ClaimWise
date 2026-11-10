@@ -41,6 +41,11 @@ export default function PwaRegistrar() {
     const isIosDevice = /iphone|ipad|ipod/.test(ua);
     setIsIos(isIosDevice);
 
+    // iOS never fires `beforeinstallprompt`, so show the banner there directly.
+    if (isIosDevice && !localStorage.getItem('cw_pwa_dismissed')) {
+      setShowBanner(true);
+    }
+
     // Capture standard install prompt on Android / Chromium
     const handleBeforeInstall = (e: Event) => {
       e.preventDefault();
