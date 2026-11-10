@@ -10,11 +10,16 @@
 //   • Only SHA-256(code + salt) is stored, in otp_challenges.
 //   • Max 5 verification attempts per challenge.
 //   • Rate limit: one request per 45 s per user.
-//   • Consent model: SMS provider is configured via env
-//     (Twilio / Msg91). Without one, dev mode can be enabled
-//     explicitly with OTP_DEV_BYPASS=1 so local testing works;
-//     production WITHOUT a provider refuses to send and the UI
-//     explains that honestly. No logging of codes, ever.
+//   • Consent model: SMS provider is configured via env (Msg91).
+//     Dev mode (code shown on-screen) is NEVER a silent default —
+//     it requires the explicit OTP_DEV_BYPASS=1 env flag, which
+//     must never be set in production. Without any channel the
+//     request path refuses honestly and documents unlock only via
+//     an enrolled TOTP authenticator (or not at all — no silent
+//     downgrade). Production also REFUSES to mint elevation
+//     cookies unless OTP_ELEVATION_SECRET (or DIGILOCKER_STATE_
+//     SECRET) is configured — a hardcoded key would be forgeable.
+//     No logging of codes, ever.
 //
 // The elevation cookie is AES-256-GCM encrypted via jose and
 // HttpOnly — the browser cannot read or mint it.
@@ -46,12 +51,33 @@ export function smsConfig(): SmsConfig {
   if (process.env.MSG91_AUTH_KEY && process.env.MSG91_TEMPLATE_ID) {
     return { provider: "msg91", devBypass: false };
   }
-  // Direct verification code simulation is enabled by default so no paid SMS gateway is needed
-  return { provider: "none", devBypass: true };
+  // Dev bypass is opt-in ONLY. A deployment without an SMS provider
+  // must never silently lower the lock by showing codes on-screen.
+  return { provider: "none", devBypass: process.env.OTP_DEV_BYPASS === "1" };
 }
 
-export function isOtpAvailable(): boolean {
-  return true;
+/** True when an SMS channel actually exists (provider or explicit dev bypass). */
+export function canSendOtp(): boolean {
+  const config = smsConfig();
+  return config.provider === "msg91" || config.devBypass;
+}
+
+/**
+ * Decides whether the owner-facing sensitive-action lock engages for
+ * this user. Engages when any verification channel exists: a real SMS
+ * provider, an explicit dev bypass, or an enrolled TOTP authenticator.
+ * A bare deployment (no provider, no authenticator) stays unlocked so
+ * owners are never bricked out of their own documents.
+ */
+export async function ownerLockActive(userId: string): Promise<boolean> {
+  if (canSendOtp()) return true;
+  const supabase = await createSupabaseServerClient();
+  const { data: row } = await supabase
+    .from("totp_secrets")
+    .select("confirmed")
+    .eq("user_id", userId)
+    .maybeSingle();
+  return row?.confirmed === true;
 }
 
 /** 91x… or +91… → "91xxxxx1234" for UI display. */
@@ -165,9 +191,18 @@ export async function requestOtp(userId: string, purpose: string): Promise<Reque
     } catch {
       return { ok: false, error: "The SMS could not be delivered. Try again shortly." };
     }
+  } else if (!config.devBypass) {
+    // Honest failure — no SMS channel is configured and the dev bypass
+    // was not explicitly enabled, so no code can be delivered.
+    return {
+      ok: false,
+      error:
+        "SMS delivery is not configured on this deployment. Enroll an authenticator app (Profile → Security) to unlock documents, or set OTP_DEV_BYPASS=1 while testing locally.",
+    };
   } else {
-    // Direct on-screen verification code: instant, secure, and requires no external SMS service
-    console.log(`[otp] code generated for user ${userId}: ${code}`);
+    // Explicit dev bypass — code is returned to the verified owner's
+    // own browser session, never logged, never stored in clear text.
+    console.log(`[otp] DEV bypass code generated for user ${userId}`);
     return {
       ok: true,
       cooldownRemaining: REQUEST_COOLDOWN_SECONDS,
@@ -228,13 +263,18 @@ export async function verifyOtp(
     return { ok: false, error: `Wrong code. ${left > 0 ? `${left} attempt${left === 1 ? "" : "s"} left.` : "Request a new code."}` };
   }
 
-  const { error: consumeError } = await supabase
+  const { data: consumedRows, error: consumeError } = await supabase
     .from("otp_challenges")
     .update({ consumed: true })
-    .eq("id", challenge.id);
+    .eq("id", challenge.id)
+    .eq("consumed", false) // atomic: a racing duplicate verify loses this race
+    .select("id");
   if (consumeError) {
     console.error("[otp:verify] consume failed:", consumeError.message);
     return { ok: false, error: "A database error occurred. Please try again." };
+  }
+  if (!consumedRows || consumedRows.length === 0) {
+    return { ok: false, error: "That code was already used. Request a new one." };
   }
   return { ok: true, provided: true };
 }
@@ -247,8 +287,22 @@ export function elevationKey(): Uint8Array {
   const secret = (
     process.env.OTP_ELEVATION_SECRET ||
     process.env.DIGILOCKER_STATE_SECRET ||
-    `claimwise-elev:${process.env.DIGILOCKER_CLIENT_SECRET ?? "dev"}`
+    ""
   ).trim();
+
+  if (!secret) {
+    // Fail closed in production: a hardcoded fallback key would be public
+    // knowledge (this repo) and let anyone forge a 5-minute elevation
+    // cookie — i.e. open OTP-locked documents without proof of identity.
+    if (process.env.NODE_ENV === "production") {
+      throw new Error(
+        "OTP_ELEVATION_SECRET (or DIGILOCKER_STATE_SECRET) must be configured in production before elevation cookies can be minted."
+      );
+    }
+    // Local/dev convenience only — never reachable in a production build.
+    return new TextEncoder().encode("claimwise-elev-dev-key-000000".padEnd(32, "0").slice(0, 32));
+  }
+
   return new TextEncoder().encode(secret.padEnd(32, "0").slice(0, 32));
 }
 

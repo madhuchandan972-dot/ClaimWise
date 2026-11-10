@@ -18,7 +18,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionFromRequest } from "@/lib/auth";
 import { getFileForViewer } from "@/lib/store";
-import { ELEVATION_COOKIE, OTP_PURPOSE, isOtpAvailable, verifyElevation } from "@/lib/otp";
+import { ELEVATION_COOKIE, OTP_PURPOSE, ownerLockActive, verifyElevation } from "@/lib/otp";
 
 export async function GET(
   request: NextRequest,
@@ -44,7 +44,7 @@ export async function GET(
   // The lock engages only when an SMS channel exists (or a dev
   // bypass is enabled) — a deployment without any provider never
   // bricks document access, it simply has no lock yet.
-  if (file.userId === session.sub && isOtpAvailable()) {
+  if (file.userId === session.sub && (await ownerLockActive(session.sub))) {
     const elevated = await verifyElevation(
       request.cookies.get(ELEVATION_COOKIE)?.value,
       session.sub,
