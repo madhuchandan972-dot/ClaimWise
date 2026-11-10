@@ -22,6 +22,7 @@ import {
   Loader2,
   Sparkles,
   AlertOctagon,
+  Download,
 } from 'lucide-react';
 
 interface SessionUser {

@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
+import PwaRegistrar from '@/components/ui/PwaRegistrar'
 
 export const metadata: Metadata = {
   title: {
@@ -11,6 +12,12 @@ export const metadata: Metadata = {
   keywords: ['family vault', 'emergency', 'documents', 'property', 'insurance', 'scholarship', 'ClaimWise'],
   authors: [{ name: 'ClaimWise' }],
   creator: 'ClaimWise',
+  manifest: '/manifest.webmanifest',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'ClaimWise',
+  },
   openGraph: {
     type: 'website',
     locale: 'en_IN',
@@ -28,6 +35,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
+  themeColor: '#0f172a',
 }
 
 export default function RootLayout({
@@ -42,9 +50,11 @@ export default function RootLayout({
             preconnects only speed that single stylesheet fetch up. */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
       </head>
       <body className="min-h-screen bg-white">
         {children}
+        <PwaRegistrar />
       </body>
     </html>
   )
