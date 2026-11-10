@@ -20,8 +20,26 @@ export default function PwaRegistrar() {
     if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
       navigator.serviceWorker
         .register('/sw.js')
-        .then(() => {
-          // Registered
+        .then((registration) => {
+          // The SW takes over immediately (skipWaiting in sw.js). After a
+          // new worker activates, reload once so the UI runs the fresh
+          // build instead of a stale shell. The sessionStorage guard
+          // prevents reload loops.
+          registration.addEventListener('updatefound', () => {
+            const worker = registration.installing;
+            worker?.addEventListener('statechange', () => {
+              if (
+                worker.state === 'activated' &&
+                navigator.serviceWorker.controller &&
+                !sessionStorage.getItem('cw_sw_reloaded')
+              ) {
+                sessionStorage.setItem('cw_sw_reloaded', '1');
+                window.location.reload();
+              }
+            });
+          });
+          // Check for updates on every open.
+          registration.update().catch(() => {});
         })
         .catch(() => {});
     }
