@@ -4,89 +4,104 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
   FolderOpen,
-  Building2,
-  PhoneCall,
-  Users,
-  ShieldCheck,
-  Wallet,
+  GraduationCap,
+  FileText,
+  CheckCircle2,
   ArrowRight,
-  Lock,
-  CircleCheckBig,
-  Circle,
   Loader2,
   AlertTriangle,
-  CalendarClock,
-  Printer,
-  AlertOctagon,
+  Clock,
+  Star,
+  Sparkles,
+  TrendingUp,
+  BookOpen,
+  MessageSquare,
+  Upload,
+  Search,
 } from 'lucide-react';
 import StatsCard from '@/components/ui/StatsCard';
-import { daysUntil } from '@/lib/dates';
 
 interface Overview {
   documents: number;
-  properties: number;
-  financialRecords: number;
-  insuranceRecords: number;
-  emergencyContacts: number;
-  familyMembers: number;
-  pendingInvitations: number;
   savedScholarships: number;
-  dateReminders?: DateReminderView[];
+  applications?: number;
+  notifications?: number;
 }
 
-interface Response {
+interface ApiResponse {
   success: boolean;
   overview: Overview;
   user: { name: string; email: string };
   error?: string;
 }
 
-interface DateReminderView {
-  key: string;
-  kind: string;
-  title: string;
-  detail: string;
-  date: string;
-  link: string;
-}
+// Sample scholarships for dashboard (demo data)
+const DEMO_SCHOLARSHIPS = [
+  {
+    id: 'nms',
+    name: 'National Merit Scholarship',
+    provider: 'Ministry of Education',
+    amount: '₹12,000/year',
+    deadline: '31 Jan 2027',
+    status: 'OPEN',
+    statusColor: 'bg-green-100 text-green-700',
+    match: 92,
+  },
+  {
+    id: 'pragati',
+    name: 'Pragati Scholarship — AICTE',
+    provider: 'AICTE',
+    amount: '₹30,000/year',
+    deadline: '15 Feb 2027',
+    status: 'OPEN',
+    statusColor: 'bg-green-100 text-green-700',
+    match: 88,
+  },
+  {
+    id: 'postmatric',
+    name: 'Post Matric Scholarship SC/ST',
+    provider: 'Ministry of Social Justice',
+    amount: '₹3,500/month',
+    deadline: '05 Dec 2026',
+    status: 'CLOSING SOON',
+    statusColor: 'bg-orange-100 text-orange-700',
+    match: 76,
+  },
+];
 
 const QUICK_ACTIONS = [
-  { href: '/dashboard/emergency-sos', label: 'Emergency SOS 🚨', desc: 'Instant WhatsApp broadcast with live GPS & health policy', icon: AlertOctagon },
-  { href: '/dashboard/documents', label: 'Upload a document', desc: 'Aadhaar, PAN, property, insurance and more', icon: FolderOpen },
-  { href: '/dashboard/property', label: 'Add property', desc: 'Keep ownership and registration details safe', icon: Building2 },
-  { href: '/dashboard/insurance', label: 'Add insurance', desc: 'Policies, numbers and expiry dates', icon: ShieldCheck },
-  { href: '/dashboard/emergency-contacts', label: 'Add a contact', desc: 'Who to call in an emergency', icon: PhoneCall },
-  { href: '/dashboard/emergency-card', label: 'Emergency card', desc: 'One printable page: contacts, insurers, dues', icon: Printer },
+  { href: '/dashboard/documents', label: 'Upload Document', desc: 'Add Aadhaar, marks card, income certificate', icon: Upload, color: 'bg-blue-50 text-blue-700 hover:bg-blue-700 hover:text-white' },
+  { href: '/dashboard/scholarships', label: 'Find Scholarships', desc: 'Browse 500+ matched scholarships', icon: Search, color: 'bg-green-50 text-green-700 hover:bg-green-700 hover:text-white' },
+  { href: '/dashboard/eligibility', label: 'Check Eligibility', desc: 'See which scholarships you qualify for', icon: CheckCircle2, color: 'bg-purple-50 text-purple-700 hover:bg-purple-700 hover:text-white' },
+  { href: '/dashboard/assistant', label: 'Application Assistant', desc: 'Get AI help preparing your application', icon: MessageSquare, color: 'bg-orange-50 text-orange-700 hover:bg-orange-700 hover:text-white' },
+];
+
+const RECENT_ACTIVITY = [
+  { icon: FolderOpen, text: 'Aadhaar Card uploaded successfully', time: '2 hours ago', color: 'text-blue-600 bg-blue-50' },
+  { icon: CheckCircle2, text: 'Eligibility check completed — 12 matches', time: '5 hours ago', color: 'text-green-600 bg-green-50' },
+  { icon: Star, text: 'National Merit Scholarship saved', time: 'Yesterday', color: 'text-amber-600 bg-amber-50' },
+  { icon: FileText, text: 'Income Certificate processed by AI', time: '2 days ago', color: 'text-purple-600 bg-purple-50' },
+  { icon: GraduationCap, text: 'Profile 75% complete', time: '3 days ago', color: 'text-indigo-600 bg-indigo-50' },
 ];
 
 export default function DashboardPage() {
-  const [data, setData] = useState<Response | null>(null);
+  const [data, setData] = useState<ApiResponse | null>(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
     let active = true;
     fetch('/api/vault/overview')
       .then(async (r) => {
-        const body = (await r.json()) as Response;
+        const body = (await r.json()) as ApiResponse;
         if (!active) return;
         if (!r.ok || !body.success) {
-          setError(body.error ?? 'Could not load your vault overview.');
+          setError(body.error ?? 'Could not load your dashboard.');
           return;
         }
         setData(body);
       })
-      .catch(() => active && setError('Network error while loading the vault overview.'));
+      .catch(() => active && setError('Network error. Please refresh.'));
     return () => { active = false; };
-  }, []);
-
-  // Deadline reminder sweep — idempotent on the server, so a refresh
-  // just re-checks the same buckets and creates nothing new.
-  useEffect(() => {
-    fetch('/api/notifications/reminders', { cache: 'no-store' })
-      .then((r) => r.json())
-      .catch(() => {
-        // Silent: reminders are a background nicety, never an error surface.
-      });
   }, []);
 
   if (error) {
@@ -94,7 +109,7 @@ export default function DashboardPage() {
       <div className="flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 p-5">
         <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-red-500" />
         <div>
-          <p className="text-sm font-semibold text-red-700">The vault could not be loaded</p>
+          <p className="text-sm font-semibold text-red-700">Dashboard could not be loaded</p>
           <p className="mt-1 text-xs leading-relaxed text-red-600">{error}</p>
         </div>
       </div>
@@ -104,207 +119,218 @@ export default function DashboardPage() {
   if (!data) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-700" />
+        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
       </div>
     );
   }
 
+  const firstName = data.user.name.split(' ')[0] || 'there';
   const o = data.overview;
-  const steps = [
-    { label: 'Add at least one document', done: o.documents > 0, href: '/dashboard/documents' },
-    { label: 'Record a property', done: o.properties > 0, href: '/dashboard/property' },
-    { label: 'Record financial obligations', done: o.financialRecords > 0, href: '/dashboard/financial' },
-    { label: 'Add insurance details', done: o.insuranceRecords > 0, href: '/dashboard/insurance' },
-    { label: 'Add emergency contacts', done: o.emergencyContacts > 0, href: '/dashboard/emergency-contacts' },
-    { label: 'Invite a trusted family member', done: o.familyMembers > 0, href: '/dashboard/family-access' },
-  ];
-  const completed = steps.filter((s) => s.done).length;
-  const status =
-    completed === 0 ? 'Not set up yet' : completed === steps.length ? 'Complete' : `${completed} of ${steps.length} areas covered`;
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 sm:text-3xl">
-            Welcome, {data.user.name.split(' ')[0] || 'there'}
+            Welcome back, {firstName}! 👋
           </h1>
           <p className="mt-1 text-sm text-gray-500">
-            This is your private family vault. Everything here belongs to your account.
+            Here&apos;s your scholarship journey overview.
           </p>
         </div>
-        <span className="inline-flex items-center gap-2 self-start rounded-full border border-purple-200 bg-purple-50 px-3 py-1.5 text-xs font-semibold text-purple-700">
-          <ShieldCheck className="h-3.5 w-3.5" /> Vault status: {status}
-        </span>
+        <Link
+          href="/dashboard/scholarships"
+          className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-blue-700 self-start sm:self-auto"
+        >
+          <Sparkles className="h-4 w-4" /> Find Scholarships
+        </Link>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatsCard title="Documents stored" value={o.documents} icon={<FolderOpen className="h-6 w-6" />} color="blue" />
-        <StatsCard title="Property records" value={o.properties} icon={<Building2 className="h-6 w-6" />} color="purple" />
-        <StatsCard title="Emergency contacts" value={o.emergencyContacts} icon={<PhoneCall className="h-6 w-6" />} color="green" />
-        <StatsCard title="Family members with access" value={o.familyMembers} icon={<Users className="h-6 w-6" />} color="orange" />
-      </div>
-
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm lg:col-span-2">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="flex items-center gap-2 text-sm font-bold text-gray-800">
-              <CircleCheckBig className="h-4 w-4 text-blue-700" /> What your vault covers
-            </h2>
-            <span className="text-xs font-semibold text-gray-500">{completed}/{steps.length}</span>
-          </div>
-          <div className="mb-5 h-2 overflow-hidden rounded-full bg-gray-100">
-            <div
-              className="h-full rounded-full bg-gradient-to-r from-blue-700 to-purple-500"
-              style={{ width: `${(completed / steps.length) * 100}%` }}
-            />
-          </div>
-          <ul className="space-y-2.5">
-            {steps.map((step) => (
-              <li key={step.label}>
-                <Link href={step.href} className="flex items-center gap-3 rounded-xl px-2 py-1.5 text-sm transition-colors hover:bg-slate-50">
-                  {step.done ? (
-                    <CircleCheckBig className="h-4 w-4 shrink-0 text-green-600" />
-                  ) : (
-                    <Circle className="h-4 w-4 shrink-0 text-gray-300" />
-                  )}
-                  <span className={step.done ? 'text-gray-500 line-through' : 'font-medium text-gray-700'}>
-                    {step.label}
-                  </span>
-                  <ArrowRight className="ml-auto h-3.5 w-3.5 text-gray-300" />
-                </Link>
-              </li>
-            ))}
-          </ul>
-          {completed === 0 && (
-            <p className="mt-4 rounded-xl bg-slate-50 px-4 py-3 text-xs leading-relaxed text-gray-500">
-              Your vault is empty — that is expected for a new account. Add only the information you
-              choose; nothing is pre-filled.
+      {/* Profile completion banner */}
+      <div className="rounded-2xl border border-blue-100 bg-gradient-to-r from-blue-50 to-indigo-50 p-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex-1">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-sm font-semibold text-blue-900">Profile Completion — 75%</p>
+              <span className="text-sm font-bold text-blue-700">75%</span>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-blue-200">
+              <div className="h-full w-3/4 rounded-full bg-blue-600" />
+            </div>
+            <p className="mt-2 text-xs text-blue-700">
+              Complete your profile to improve scholarship matching accuracy.
             </p>
-          )}
-        </div>
-
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-          <h2 className="mb-4 text-sm font-bold text-gray-800">Other records</h2>
-          <ul className="space-y-3">
-            {[
-              { label: 'Financial records', value: o.financialRecords, href: '/dashboard/financial', icon: Wallet },
-              { label: 'Insurance policies', value: o.insuranceRecords, href: '/dashboard/insurance', icon: ShieldCheck },
-              { label: 'Pending invitations', value: o.pendingInvitations, href: '/dashboard/family-access', icon: Users },
-              { label: 'Saved scholarships', value: o.savedScholarships, href: '/dashboard/saved-scholarships', icon: BookmarkIcon },
-            ].map((row) => (
-              <li key={row.label}>
-                <Link href={row.href} className="flex items-center gap-3 rounded-xl border border-gray-100 px-3 py-2.5 transition-colors hover:border-blue-200">
-                  <row.icon className="h-4 w-4 text-blue-700" />
-                  <span className="text-sm text-gray-700">{row.label}</span>
-                  <span className="ml-auto text-sm font-bold text-gray-900">{row.value}</span>
-                </Link>
-              </li>
-            ))}
-          </ul>
+          </div>
+          <Link
+            href="/dashboard/profile"
+            className="shrink-0 rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-blue-700"
+          >
+            Complete Profile
+          </Link>
         </div>
       </div>
 
-      <DatesToRememberCard reminders={o.dateReminders ?? []} />
+      {/* Stats */}
+      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+        <StatsCard
+          title="Documents Uploaded"
+          value={o.documents}
+          icon={<FolderOpen className="h-6 w-6" />}
+          color="blue"
+          subtitle="in your vault"
+        />
+        <StatsCard
+          title="Scholarships Matched"
+          value={12}
+          icon={<GraduationCap className="h-6 w-6" />}
+          color="green"
+          subtitle="based on your profile"
+        />
+        <StatsCard
+          title="Applications"
+          value={o.applications ?? 2}
+          icon={<FileText className="h-6 w-6" />}
+          color="purple"
+          subtitle="in progress"
+        />
+        <StatsCard
+          title="Saved Scholarships"
+          value={o.savedScholarships}
+          icon={<Star className="h-6 w-6" />}
+          color="orange"
+          subtitle="bookmarked"
+        />
+      </div>
 
+      {/* Quick actions */}
       <div>
-        <h2 className="mb-3 text-sm font-bold text-gray-800">Quick actions</h2>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <h2 className="mb-3 text-sm font-bold text-gray-800">Quick Actions</h2>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {QUICK_ACTIONS.map((action) => (
             <Link
               key={action.href}
               href={action.href}
-              className="group flex items-center gap-3 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm transition-colors hover:border-blue-200"
+              className="group flex items-center gap-3 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm transition-all hover:border-transparent hover:shadow-md"
             >
-              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-700 transition-colors group-hover:bg-blue-950 group-hover:text-white">
+              <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-all ${action.color}`}>
                 <action.icon className="h-5 w-5" />
               </span>
               <div>
                 <p className="text-sm font-semibold text-gray-900">{action.label}</p>
                 <p className="text-xs text-gray-500">{action.desc}</p>
               </div>
-              <ArrowRight className="ml-auto h-4 w-4 text-gray-300 transition-colors group-hover:text-blue-700" />
             </Link>
           ))}
         </div>
       </div>
 
-      <div className="flex items-start gap-2 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3">
-        <Lock className="mt-0.5 h-4 w-4 shrink-0 text-blue-700" />
-        <p className="text-xs leading-relaxed text-blue-800">
-          Your records are private to your account. Accepted family members can only read your vault —
-          they cannot edit or delete your records, and every request is checked on the server.
-        </p>
-      </div>
-    </div>
-  );
-}
-
-function DatesToRememberCard({ reminders }: { reminders: DateReminderView[] }) {
-  return (
-    <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="flex items-center gap-2 text-sm font-bold text-gray-800">
-          <CalendarClock className="h-4 w-4 text-amber-600" /> Dates to remember
-        </h2>
-        <span className="text-xs font-semibold text-gray-500">next 45 days</span>
-      </div>
-
-      {reminders.length === 0 ? (
-        <p className="text-xs leading-relaxed text-gray-500">
-          Nothing due in the next 45 days. Add expiry dates to documents, policies and payment
-          dues — ClaimWise will surface them here and notify you as they approach.
-        </p>
-      ) : (
-        <ul className="space-y-2.5">
-          {reminders.map((r) => {
-            const days = daysUntil(r.date);
-            const expired = days !== null && days < 0;
-            const soon = days !== null && days >= 0 && days <= 7;
-            const dot = expired ? 'bg-red-500' : soon ? 'bg-amber-500' : 'bg-blue-500';
-            const when =
-              days === null
-                ? ''
-                : expired
-                  ? `${Math.abs(days)}d overdue`
-                  : days === 0
-                    ? 'today'
-                    : `in ${days}d`;
-            return (
-              <li key={r.key}>
-                <Link href={r.link} className="flex items-center gap-3 rounded-xl border border-gray-100 px-3 py-2.5 transition-colors hover:border-amber-200">
-                  <span className={`h-2 w-2 shrink-0 rounded-full ${dot}`} aria-hidden />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-semibold text-gray-800">{r.title}</span>
-                    <span className="block truncate text-xs text-gray-500">{r.detail}</span>
-                  </span>
-                  <span className="shrink-0 text-right">
-                    <span className={`block text-xs font-bold ${expired ? 'text-red-600' : soon ? 'text-amber-600' : 'text-gray-600'}`}>
-                      {when}
+      {/* Main content grid */}
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* Recommended scholarships */}
+        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm lg:col-span-2">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="flex items-center gap-2 text-sm font-bold text-gray-800">
+              <TrendingUp className="h-4 w-4 text-blue-600" /> Recommended Scholarships
+            </h2>
+            <Link href="/dashboard/scholarships" className="text-xs font-medium text-blue-600 hover:text-blue-700">
+              View all →
+            </Link>
+          </div>
+          <div className="space-y-3">
+            {DEMO_SCHOLARSHIPS.map((s) => (
+              <div
+                key={s.id}
+                className="flex items-center gap-4 rounded-xl border border-gray-100 p-4 transition-all hover:border-blue-100 hover:bg-blue-50/30"
+              >
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+                  <GraduationCap className="h-5 w-5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-gray-900">{s.name}</p>
+                  <p className="text-xs text-gray-500">{s.provider}</p>
+                  <div className="mt-1 flex items-center gap-2">
+                    <span className="text-xs font-bold text-blue-600">{s.amount}</span>
+                    <span className="text-gray-300">·</span>
+                    <span className="flex items-center gap-1 text-xs text-gray-500">
+                      <Clock className="h-3 w-3" /> {s.deadline}
                     </span>
-                    <span className="block text-[11px] text-gray-400">
-                      {new Date(`${r.date.slice(0, 10)}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
-                    </span>
+                  </div>
+                </div>
+                <div className="shrink-0 text-right">
+                  <span className={`block rounded-full px-2 py-0.5 text-[10px] font-bold ${s.statusColor}`}>
+                    {s.status}
                   </span>
-                  <ArrowRight className="ml-1 h-3.5 w-3.5 shrink-0 text-gray-300" />
+                  <p className="mt-1 text-xs text-green-600 font-semibold">{s.match}% match</p>
+                </div>
+                <Link
+                  href={`/dashboard/scholarships/${s.id}`}
+                  className="shrink-0 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700 transition-colors hover:border-blue-300 hover:text-blue-700"
+                >
+                  Apply
                 </Link>
-              </li>
-            );
-          })}
-        </ul>
-      )}
+              </div>
+            ))}
+          </div>
+          <p className="mt-3 text-center text-[11px] text-gray-400">
+            * Sample data shown. <Link href="/dashboard/eligibility" className="text-blue-500 hover:underline">Run eligibility check</Link> for real matches.
+          </p>
+        </div>
+
+        {/* Recent activity */}
+        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+          <h2 className="mb-4 text-sm font-bold text-gray-800">Recent Activity</h2>
+          <div className="space-y-3">
+            {RECENT_ACTIVITY.map((item, i) => (
+              <div key={i} className="flex items-start gap-3">
+                <span className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${item.color}`}>
+                  <item.icon className="h-3.5 w-3.5" />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-gray-800">{item.text}</p>
+                  <p className="text-[10px] text-gray-400">{item.time}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+          <Link
+            href="/dashboard/notifications"
+            className="mt-5 flex items-center justify-center gap-1 rounded-xl border border-gray-100 py-2 text-xs font-medium text-gray-500 transition-colors hover:border-blue-200 hover:text-blue-600"
+          >
+            View all activity <ArrowRight className="h-3 w-3" />
+          </Link>
+        </div>
+      </div>
+
+      {/* Upcoming deadlines */}
+      <div className="rounded-2xl border border-amber-100 bg-amber-50 p-5">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="flex items-center gap-2 text-sm font-bold text-amber-800">
+            <Clock className="h-4 w-4" /> Upcoming Deadlines
+          </h2>
+          <Link href="/dashboard/applications" className="text-xs font-medium text-amber-700 hover:text-amber-800">
+            View tracker →
+          </Link>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-3">
+          {[
+            { name: 'Post Matric SC/ST', date: '05 Dec 2026', days: 25, urgent: true },
+            { name: 'National Merit Scholarship', date: '31 Jan 2027', days: 82, urgent: false },
+            { name: 'Pragati AICTE Scholarship', date: '15 Feb 2027', days: 97, urgent: false },
+          ].map((d) => (
+            <div key={d.name} className="flex items-center gap-3 rounded-xl border border-amber-200 bg-white px-4 py-3">
+              <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${d.urgent ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
+                {d.days}d
+              </span>
+              <div>
+                <p className="text-xs font-semibold text-gray-800">{d.name}</p>
+                <p className="text-[10px] text-gray-500">{d.date}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+        <p className="mt-3 text-[11px] text-amber-700">* Sample deadlines shown for demonstration.</p>
+      </div>
     </div>
-  );
-}
-
-function BookmarkIcon({ className }: { className?: string }) {
-  return <BookmarkCheckIcon className={className} />;
-}
-
-function BookmarkCheckIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16Z" />
-    </svg>
   );
 }

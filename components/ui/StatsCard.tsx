@@ -12,6 +12,7 @@ interface StatsCardProps {
   /** Optional override for trend direction - inferred from change string if not provided */
   trendUp?: boolean;
   className?: string;
+  subtitle?: string;
 }
 
 const colorStyles: Record<
@@ -48,6 +49,7 @@ export default function StatsCard({
   color = 'blue',
   trendUp,
   className = '',
+  subtitle,
 }: StatsCardProps) {
   const { iconBg, iconText, valueTxt } = colorStyles[color];
 
@@ -94,6 +96,7 @@ export default function StatsCard({
       <div className="mt-4">
         <p className={`text-3xl font-bold tracking-tight ${valueTxt}`}>{value}</p>
         <p className="mt-1 text-sm font-medium text-gray-500">{title}</p>
+        {subtitle && <p className="mt-0.5 text-xs text-gray-400">{subtitle}</p>}
       </div>
 
       {/* Subtle bottom accent bar */}
