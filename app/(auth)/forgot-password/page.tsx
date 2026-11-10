@@ -1,10 +1,21 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { Suspense, useState, useCallback } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { AlertCircle, Loader2, MailCheck, ArrowLeft } from 'lucide-react';
 
 export default function ForgotPasswordPage() {
+  return (
+    <Suspense fallback={null}>
+      <ForgotPasswordForm />
+    </Suspense>
+  );
+}
+
+function ForgotPasswordForm() {
+  const searchParams = useSearchParams();
+  const expiredLink = searchParams.get('error') === 'expired';
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -57,6 +68,17 @@ export default function ForgotPasswordPage() {
           </div>
         ) : (
           <>
+            {expiredLink && !sent && (
+              <div className="mb-5 flex items-start gap-2 rounded-xl bg-amber-50 border border-amber-200 px-4 py-3">
+                <AlertCircle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
+                <p className="text-xs text-amber-700">
+                  That sign-in link has <b>expired or was already used</b> — Supabase links are
+                  single-use and short-lived. Request a fresh one below (check spam, and always
+                  use the newest email).
+                </p>
+              </div>
+            )}
+
             <div className="mb-6">
               <h1 className="text-2xl font-bold text-gray-900">Forgot your password?</h1>
               <p className="mt-1 text-sm text-gray-500">
